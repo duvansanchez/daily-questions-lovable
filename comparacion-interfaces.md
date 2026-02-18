@@ -54,7 +54,7 @@ El **repositorio de GitHub** (daily-questions-app) es una aplicación Flask/Pyth
 - ❌ No hay persistencia real
 - ❌ Los datos se pierden al recargar
 
-### 2.3 Sistema de Preguntas Diarias
+### 2.3 Sistema de Preguntas Diarias -COMPLETADO
 **GitHub tiene:**
 - CRUD completo de preguntas
 - Tipos de pregunta: text, select, checkbox, radio

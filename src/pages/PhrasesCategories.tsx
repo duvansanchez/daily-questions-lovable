@@ -11,6 +11,9 @@ export default function PhrasesCategories() {
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<PhraseCategory | null>(null);
   const [editingSubcategory, setEditingSubcategory] = useState<{ category: PhraseCategory; subcategory: PhraseSubcategory } | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  const selectedCategory = selectedCategoryId ? categories.find(c => c.id === selectedCategoryId) : null;
 
   const handleCreateCategory = () => {
     setEditingCategory(null);
@@ -55,11 +58,13 @@ export default function PhrasesCategories() {
   };
 
   const handleCreateSubcategory = (category: PhraseCategory) => {
+    setSelectedCategoryId(category.id);
     setEditingSubcategory({ category, subcategory: null as any });
     setShowSubcategoryModal(true);
   };
 
   const handleEditSubcategory = (category: PhraseCategory, subcategory: PhraseSubcategory) => {
+    setSelectedCategoryId(category.id);
     setEditingSubcategory({ category, subcategory });
     setShowSubcategoryModal(true);
   };
@@ -201,6 +206,17 @@ export default function PhrasesCategories() {
 
                         <div className="flex items-center gap-1">
                           <button
+                            onClick={() => setSelectedCategoryId(selectedCategoryId === category.id ? null : category.id)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                              selectedCategoryId === category.id
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}
+                            title="Ver subcategorías"
+                          >
+                            {selectedCategoryId === category.id ? 'Ocultar' : 'Ver'} subcategorías
+                          </button>
+                          <button
                             onClick={() => handleToggleCategoryActive(category.id)}
                             className={`p-2 rounded-lg transition-colors ${
                               category.active
@@ -239,16 +255,22 @@ export default function PhrasesCategories() {
                 <h3 className="text-lg font-semibold text-foreground">Subcategorías</h3>
               </div>
 
-              <div className="space-y-4">
-                {categories.map(category => (
-                  <div key={category.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                        <Tag className="h-3 w-3" />
-                        {category.name}
+              {!selectedCategory ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center bg-muted/30 rounded-xl">
+                  <Tag className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                  <p className="text-muted-foreground font-medium">Selecciona una categoría</p>
+                  <p className="text-xs text-muted-foreground mt-1">Haz clic en "Ver subcategorías" para gestionar las subcategorías de una categoría</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20">
+                      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-primary" />
+                        {selectedCategory.name}
                       </h4>
                       <button
-                        onClick={() => handleCreateSubcategory(category)}
+                        onClick={() => handleCreateSubcategory(selectedCategory)}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-all"
                       >
                         <Plus className="h-3 w-3" />
@@ -256,14 +278,14 @@ export default function PhrasesCategories() {
                       </button>
                     </div>
 
-                    {category.subcategories.length === 0 ? (
-                      <div className="text-xs text-muted-foreground italic p-3 bg-muted/30 rounded-lg">
-                        Sin subcategorías
+                    {selectedCategory.subcategories.length === 0 ? (
+                      <div className="text-xs text-muted-foreground italic p-6 bg-muted/30 rounded-lg text-center">
+                        Esta categoría no tiene subcategorías aún
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {category.subcategories.map(subcategory => {
-                          const phrasesCount = getPhrasesCount(category.id, subcategory.id);
+                        {selectedCategory.subcategories.map(subcategory => {
+                          const phrasesCount = getPhrasesCount(selectedCategory.id, subcategory.id);
 
                           return (
                             <div
@@ -287,7 +309,7 @@ export default function PhrasesCategories() {
 
                                 <div className="flex items-center gap-1">
                                   <button
-                                    onClick={() => handleToggleSubcategoryActive(category.id, subcategory.id)}
+                                    onClick={() => handleToggleSubcategoryActive(selectedCategory.id, subcategory.id)}
                                     className={`p-1.5 rounded-lg transition-colors ${
                                       subcategory.active
                                         ? 'text-success hover:bg-success/10'
@@ -298,14 +320,14 @@ export default function PhrasesCategories() {
                                     {subcategory.active ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                                   </button>
                                   <button
-                                    onClick={() => handleEditSubcategory(category, subcategory)}
+                                    onClick={() => handleEditSubcategory(selectedCategory, subcategory)}
                                     className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
                                     title="Editar"
                                   >
                                     <Edit2 className="h-3.5 w-3.5" />
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteSubcategory(category.id, subcategory.id)}
+                                    onClick={() => handleDeleteSubcategory(selectedCategory.id, subcategory.id)}
                                     className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
                                     title="Eliminar"
                                   >
@@ -319,8 +341,8 @@ export default function PhrasesCategories() {
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

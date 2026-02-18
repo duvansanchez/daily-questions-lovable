@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CalendarDays, CheckSquare, Edit2, Info, ListChecks, Plus, PlusCircle, Trash2, X } from 'lucide-react';
+import { CalendarDays, CheckSquare, ChevronDown, Edit2, Info, ListChecks, Plus, PlusCircle, Trash2, X } from 'lucide-react';
 import type { Goal, GoalCategory, GoalPriority, DayPart, SubGoal } from '@/types';
 
 interface GoalFormData {
@@ -60,6 +60,9 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
   const [form, setForm] = useState<GoalFormData>(defaultForm);
   const [newSubGoalTitle, setNewSubGoalTitle] = useState('');
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showDatesSection, setShowDatesSection] = useState(false);
+  const [showDurationSection, setShowDurationSection] = useState(false);
+  const [showRelationsSection, setShowRelationsSection] = useState(false);
 
   useEffect(() => {
     if (goal) {
@@ -82,9 +85,16 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
         subGoals: [...goal.subGoals],
       });
       setShowChecklist(goal.subGoals.length > 0);
+      // Auto-expand sections if they have data
+      setShowDatesSection(!!(goal.startDate || goal.endDate || goal.scheduledFor || goal.dayPart));
+      setShowDurationSection(!!(goal.estimatedHours || goal.estimatedMinutes || goal.reward));
+      setShowRelationsSection(!!(goal.parentGoalId || goal.isParent || goal.recurring));
     } else {
       setForm(defaultForm);
       setShowChecklist(false);
+      setShowDatesSection(false);
+      setShowDurationSection(false);
+      setShowRelationsSection(false);
     }
     setNewSubGoalTitle('');
   }, [goal, open]);
@@ -124,250 +134,306 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="goal-modal max-w-lg max-h-[90vh] overflow-y-auto border-[hsl(210,30%,18%)] bg-[hsl(215,35%,10%)] text-[hsl(210,20%,90%)] p-0 gap-0 sm:rounded-2xl">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-[hsl(215,35%,10%)] px-6 pt-6 pb-4 border-b border-[hsl(210,25%,16%)]">
+      <DialogContent className="goal-modal max-w-2xl max-h-[90vh] overflow-y-auto border-[hsl(210,30%,18%)] bg-gradient-to-br from-[hsl(215,35%,12%)] to-[hsl(215,35%,8%)] text-[hsl(210,20%,90%)] p-0 gap-0 sm:rounded-3xl shadow-2xl">
+        {/* Header with gradient */}
+        <div className="sticky top-0 z-10 bg-gradient-to-r from-[hsl(200,80%,50%)] to-[hsl(220,80%,55%)] px-6 pt-5 pb-4 rounded-t-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-heading font-bold text-[hsl(210,20%,95%)]">
+            <DialogTitle className="flex items-center gap-2 text-lg font-heading font-bold text-white drop-shadow-lg">
               {isEditing ? (
-                <><Edit2 className="h-4 w-4 text-[hsl(200,80%,60%)]" /> Editar Objetivo</>
+                <><Edit2 className="h-5 w-5" /> Editar Objetivo</>
               ) : (
-                <><PlusCircle className="h-4 w-4 text-[hsl(200,80%,60%)]" /> Agregar Nuevo Objetivo</>
+                <><PlusCircle className="h-5 w-5" /> Nuevo Objetivo</>
               )}
             </DialogTitle>
-            <DialogDescription className="text-xs text-[hsl(210,15%,50%)]">
+            <DialogDescription className="text-xs text-white/75 mt-1">
               {isEditing
                 ? 'Modifica los campos que desees y guarda los cambios.'
-                : 'Completa los campos para crear un nuevo objetivo.'}
+                : 'Define tu objetivo y establece los detalles para alcanzarlo.'}
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-1">
           {/* Título */}
-          <FieldGroup label="Título">
+          <FieldGroup label="Título" icon={<CheckSquare className="h-4 w-4" />}>
             <input
               value={form.title}
               onChange={e => update('title', e.target.value)}
-              placeholder="Título del objetivo"
-              className="modal-input"
+              placeholder="¿Qué quieres lograr?"
+              className="modal-input text-base"
               maxLength={200}
             />
           </FieldGroup>
 
           {/* Descripción */}
-          <FieldGroup label="Descripción">
+          <FieldGroup label="Descripción" icon={<Info className="h-4 w-4" />}>
             <textarea
               value={form.description}
               onChange={e => update('description', e.target.value)}
-              placeholder="Descripción detallada del objetivo"
-              className="modal-input min-h-[70px] resize-y"
+              placeholder="Describe tu objetivo con más detalle..."
+              className="modal-input min-h-[80px] resize-y text-sm"
               maxLength={2000}
             />
           </FieldGroup>
 
           {/* Prioridad + Categoría */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-5">
             <FieldGroup label="Prioridad">
-              <select value={form.priority} onChange={e => update('priority', e.target.value as GoalPriority)} className="modal-input">
-                <option value="low">Baja</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta</option>
-              </select>
+              <div className="grid grid-cols-3 gap-2">
+                {(['low', 'medium', 'high'] as GoalPriority[]).map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => update('priority', p)}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                      form.priority === p
+                        ? p === 'high' ? 'bg-priority-high text-white shadow-lg shadow-priority-high/30'
+                        : p === 'medium' ? 'bg-priority-medium text-white shadow-lg shadow-priority-medium/30'
+                        : 'bg-priority-low text-white shadow-lg shadow-priority-low/30'
+                        : 'bg-[hsl(210,25%,16%)] text-[hsl(210,15%,50%)] hover:bg-[hsl(210,25%,20%)]'
+                    }`}
+                  >
+                    {p === 'high' ? 'Alta' : p === 'medium' ? 'Media' : 'Baja'}
+                  </button>
+                ))}
+              </div>
             </FieldGroup>
             <FieldGroup label="Categoría" required>
               <select value={form.category} onChange={e => update('category', e.target.value as GoalCategory)} className="modal-input">
-                <option value="daily">Diarios</option>
-                <option value="weekly">Semanales</option>
-                <option value="monthly">Mensuales</option>
-                <option value="yearly">Anuales</option>
-                <option value="general">General</option>
+                <option value="daily">📅 Diarios</option>
+                <option value="weekly">📆 Semanales</option>
+                <option value="monthly">🗓️ Mensuales</option>
+                <option value="yearly">📊 Anuales</option>
+                <option value="general">⭐ General</option>
               </select>
             </FieldGroup>
           </div>
 
-          {/* Objetivo Padre */}
-          <FieldGroup label="Objetivo Padre (Opcional)">
-            <select value={form.parentGoalId} onChange={e => update('parentGoalId', e.target.value)} className="modal-input">
-              <option value="">Seleccionar objetivo padre</option>
-              {parentGoals.map(g => (
-                <option key={g.id} value={g.id}>{g.title}</option>
-              ))}
-            </select>
-          </FieldGroup>
+          {/* SECCIÓN 1: Fechas y Programación */}
+          <CollapsibleSection
+            title="Fechas y Programación"
+            icon="📅"
+            isOpen={showDatesSection}
+            onToggle={() => setShowDatesSection(!showDatesSection)}
+          >
+            <div className="space-y-4">
+              {/* Fechas */}
+              <div className="grid grid-cols-2 gap-4">
+                <FieldGroup label="Fecha inicio" icon={<CalendarDays className="h-4 w-4" />}>
+                  <input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} className="modal-input" />
+                </FieldGroup>
+                <FieldGroup label="Fecha fin" icon={<CalendarDays className="h-4 w-4" />}>
+                  <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} className="modal-input" />
+                </FieldGroup>
+              </div>
 
-          {/* Fechas */}
-          <div className="grid grid-cols-2 gap-4">
-            <FieldGroup label="Fecha inicio">
-              <input type="date" value={form.startDate} onChange={e => update('startDate', e.target.value)} className="modal-input" />
-            </FieldGroup>
-            <FieldGroup label="Fecha fin">
-              <input type="date" value={form.endDate} onChange={e => update('endDate', e.target.value)} className="modal-input" />
-            </FieldGroup>
-          </div>
+              {/* Programación */}
+              <div className="grid grid-cols-2 gap-4">
+                <FieldGroup label="Programar para:" labelSize="xs">
+                  <select value={form.scheduledType} onChange={e => update('scheduledType', e.target.value as 'today' | 'tomorrow' | 'specific')} className="modal-input">
+                    <option value="today">🌟 Hoy (sin programar)</option>
+                    <option value="tomorrow">☀️ Mañana</option>
+                    <option value="specific">📅 Fecha específica</option>
+                  </select>
+                </FieldGroup>
+                <FieldGroup label="Fecha específica:" labelSize="xs">
+                  <input
+                    type="date"
+                    value={form.scheduledDate}
+                    onChange={e => update('scheduledDate', e.target.value)}
+                    disabled={form.scheduledType !== 'specific'}
+                    className="modal-input disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                </FieldGroup>
+              </div>
 
-          {/* Duración estimada */}
-          <FieldGroup label="Duración estimada">
-            <div className="grid grid-cols-2 gap-4">
-              <input type="number" min="0" value={form.estimatedHours} onChange={e => update('estimatedHours', e.target.value)} placeholder="Horas" className="modal-input" />
-              <input type="number" min="0" max="59" value={form.estimatedMinutes} onChange={e => update('estimatedMinutes', e.target.value)} placeholder="Minutos" className="modal-input" />
-            </div>
-          </FieldGroup>
-
-          {/* Recompensa */}
-          <FieldGroup label="Recompensa">
-            <input value={form.reward} onChange={e => update('reward', e.target.value)} placeholder="¿Qué te darás si lo logras?" className="modal-input" maxLength={300} />
-          </FieldGroup>
-
-          {/* Parte del día */}
-          <FieldGroup label="Parte del día (Opcional)">
-            <select value={form.dayPart} onChange={e => update('dayPart', e.target.value as DayPart)} className="modal-input">
-              <option value="none">Sin especificar</option>
-              <option value="morning">Mañana</option>
-              <option value="afternoon">Tarde</option>
-              <option value="evening">Noche</option>
-            </select>
-          </FieldGroup>
-
-          {/* Checkboxes */}
-          <div className="space-y-3 border-t border-[hsl(210,25%,16%)] pt-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={form.recurring} onChange={e => update('recurring', e.target.checked)} className="modal-checkbox" />
-              <span className="text-sm text-[hsl(210,20%,80%)]">Hacer este objetivo recurrente</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={form.isParent} onChange={e => update('isParent', e.target.checked)} className="modal-checkbox" />
-              <span className="text-sm text-[hsl(210,20%,80%)]">¿Este objetivo es padre?</span>
-            </label>
-          </div>
-
-          {/* Programación */}
-          <div className="border-t border-[hsl(210,25%,16%)] pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarDays className="h-4 w-4 text-[hsl(210,15%,50%)]" />
-              <span className="text-sm font-medium text-[hsl(210,20%,80%)]">Programación</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <FieldGroup label="Programar para:" labelSize="xs">
-                <select value={form.scheduledType} onChange={e => update('scheduledType', e.target.value as 'today' | 'tomorrow' | 'specific')} className="modal-input">
-                  <option value="today">Hoy (sin programar)</option>
-                  <option value="tomorrow">Mañana</option>
-                  <option value="specific">Fecha específica</option>
+              {/* Parte del día */}
+              <FieldGroup label="Parte del día">
+                <select value={form.dayPart} onChange={e => update('dayPart', e.target.value as DayPart)} className="modal-input">
+                  <option value="none">Sin especificar</option>
+                  <option value="morning">🌅 Mañana</option>
+                  <option value="afternoon">☀️ Tarde</option>
+                  <option value="evening">🌙 Noche</option>
                 </select>
               </FieldGroup>
-              <FieldGroup label="Fecha específica:" labelSize="xs">
-                <input
-                  type="date"
-                  value={form.scheduledDate}
-                  onChange={e => update('scheduledDate', e.target.value)}
-                  disabled={form.scheduledType !== 'specific'}
-                  className="modal-input disabled:opacity-40"
-                />
+
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-[hsl(200,80%,50%,0.1)] border border-[hsl(200,80%,50%,0.2)]">
+                <Info className="h-4 w-4 text-[hsl(200,80%,60%)] mt-0.5 shrink-0" />
+                <p className="text-xs text-[hsl(200,80%,70%)]">
+                  Los objetivos programados no aparecerán en la lista de hoy hasta la fecha seleccionada.
+                </p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* SECCIÓN 2: Duración y Esfuerzo */}
+          <CollapsibleSection
+            title="Duración y Esfuerzo"
+            icon="⏱️"
+            isOpen={showDurationSection}
+            onToggle={() => setShowDurationSection(!showDurationSection)}
+          >
+            <div className="space-y-4">
+              {/* Duración estimada */}
+              <FieldGroup label="Duración estimada">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative">
+                    <input type="number" min="0" value={form.estimatedHours} onChange={e => update('estimatedHours', e.target.value)} placeholder="0" className="modal-input pr-14" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[hsl(210,15%,50%)] font-medium">horas</span>
+                  </div>
+                  <div className="relative">
+                    <input type="number" min="0" max="59" value={form.estimatedMinutes} onChange={e => update('estimatedMinutes', e.target.value)} placeholder="0" className="modal-input pr-14" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[hsl(210,15%,50%)] font-medium">min</span>
+                  </div>
+                </div>
+              </FieldGroup>
+
+              {/* Recompensa */}
+              <FieldGroup label="Recompensa">
+                <input value={form.reward} onChange={e => update('reward', e.target.value)} placeholder="¿Qué te darás si lo logras?" className="modal-input" maxLength={300} />
               </FieldGroup>
             </div>
-            <div className="flex items-start gap-2 mt-2 p-2.5 rounded-lg bg-[hsl(210,30%,13%)]">
-              <Info className="h-3.5 w-3.5 text-[hsl(210,15%,45%)] mt-0.5 shrink-0" />
-              <p className="text-[10px] text-[hsl(210,15%,45%)]">
-                Los objetivos programados no aparecerán en la lista de hoy hasta la fecha seleccionada.
-              </p>
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Checklist / Subobjetivos */}
-          <div className="border-t border-[hsl(210,25%,16%)] pt-4">
-            <button
-              onClick={() => setShowChecklist(!showChecklist)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[hsl(200,80%,50%)] px-4 py-2 text-sm font-medium text-[hsl(200,80%,60%)] hover:bg-[hsl(200,80%,50%,0.1)] transition-colors"
-            >
-              <ListChecks className="h-4 w-4" />
-              {isEditing ? 'Editar checklist (subobjetivos)' : 'Agregar checklist (subobjetivos)'}
-            </button>
+          {/* SECCIÓN 3: Relaciones y Estructura */}
+          <CollapsibleSection
+            title="Relaciones y Estructura"
+            icon="🔗"
+            isOpen={showRelationsSection}
+            onToggle={() => setShowRelationsSection(!showRelationsSection)}
+          >
+            <div className="space-y-4">
+              {/* Objetivo Padre */}
+              <FieldGroup label="Objetivo Padre (Opcional)">
+                <select value={form.parentGoalId} onChange={e => update('parentGoalId', e.target.value)} className="modal-input">
+                  <option value="">Seleccionar objetivo padre</option>
+                  {parentGoals.map(g => (
+                    <option key={g.id} value={g.id}>{g.title}</option>
+                  ))}
+                </select>
+              </FieldGroup>
 
-            {showChecklist && (
-              <div className="mt-4 space-y-3 animate-fade-in">
-                <p className="text-xs font-medium text-[hsl(200,80%,60%)]">Checklist (subobjetivos)</p>
-
-                {form.subGoals.length > 0 && (
-                  <div className="space-y-2">
-                    {form.subGoals.map(sub => (
-                      <div key={sub.id} className="flex items-center gap-3 group/sub">
-                        <button
-                          onClick={() => toggleSubGoal(sub.id)}
-                          className={`h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
-                            sub.completed
-                              ? 'bg-primary border-primary'
-                              : 'border-[hsl(210,15%,35%)] hover:border-primary'
-                          }`}
-                        >
-                          {sub.completed && (
-                            <svg className="h-2.5 w-2.5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                        <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-[hsl(210,15%,40%)]' : 'text-[hsl(210,20%,80%)]'}`}>
-                          {sub.title}
-                        </span>
-                        {/* Priority dots */}
-                        <div className="flex items-center gap-1">
-                          {(['low', 'medium', 'high'] as GoalPriority[]).map(p => (
-                            <button
-                              key={p}
-                              onClick={() => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, priority: p } : s))}
-                              className={`h-2.5 w-2.5 rounded-full transition-all ${
-                                sub.priority === p ? priorityDot[p] : 'bg-[hsl(210,15%,25%)] hover:bg-[hsl(210,15%,35%)]'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <button
-                          onClick={() => removeSubGoal(sub.id)}
-                          className="p-0.5 rounded text-[hsl(0,60%,50%)] opacity-0 group-hover/sub:opacity-100 hover:bg-[hsl(0,60%,50%,0.15)] transition-all"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add new subgoal */}
-                <div className="flex items-center gap-2">
-                  <input
-                    value={newSubGoalTitle}
-                    onChange={e => setNewSubGoalTitle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addSubGoal()}
-                    placeholder="Nuevo subobjetivo..."
-                    className="modal-input flex-1"
-                    maxLength={200}
+              {/* Checkboxes */}
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer group p-3 rounded-xl hover:bg-[hsl(210,25%,14%)] transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={form.recurring} 
+                    onChange={e => update('recurring', e.target.checked)} 
+                    className="mt-1 h-4 w-4 rounded border-2 border-[hsl(210,15%,35%)] bg-[hsl(215,30%,13%)] text-[hsl(200,80%,50%)] focus:ring-2 focus:ring-[hsl(200,80%,50%,0.5)] focus:ring-offset-0 cursor-pointer transition-all checked:bg-[hsl(200,80%,50%)] checked:border-[hsl(200,80%,50%)]" 
                   />
-                  <button
-                    onClick={addSubGoal}
-                    disabled={!newSubGoalTitle.trim()}
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
-                  >
-                    Agregar
-                  </button>
-                </div>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[hsl(210,20%,85%)] group-hover:text-[hsl(210,20%,95%)] transition-colors">🔄 Hacer este objetivo recurrente</span>
+                    <p className="text-xs text-[hsl(210,15%,50%)] mt-0.5">El objetivo se repetirá según la frecuencia establecida</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer group p-3 rounded-xl hover:bg-[hsl(210,25%,14%)] transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={form.isParent} 
+                    onChange={e => update('isParent', e.target.checked)} 
+                    className="mt-1 h-4 w-4 rounded border-2 border-[hsl(210,15%,35%)] bg-[hsl(215,30%,13%)] text-[hsl(200,80%,50%)] focus:ring-2 focus:ring-[hsl(200,80%,50%,0.5)] focus:ring-offset-0 cursor-pointer transition-all checked:bg-[hsl(200,80%,50%)] checked:border-[hsl(200,80%,50%)]" 
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[hsl(210,20%,85%)] group-hover:text-[hsl(210,20%,95%)] transition-colors">👨‍👩‍👧‍👦 Este objetivo es padre</span>
+                    <p className="text-xs text-[hsl(210,15%,50%)] mt-0.5">Puede contener sub-objetivos relacionados</p>
+                  </div>
+                </label>
               </div>
-            )}
-          </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* SECCIÓN 4: Checklist / Subobjetivos */}
+          <CollapsibleSection
+            title="Checklist de Subobjetivos"
+            icon="✅"
+            isOpen={showChecklist}
+            onToggle={() => setShowChecklist(!showChecklist)}
+            badge={form.subGoals.length > 0 ? form.subGoals.length : undefined}
+          >
+            <div className="space-y-4">
+              {form.subGoals.length > 0 && (
+                <div className="space-y-2">
+                  {form.subGoals.map(sub => (
+                    <div key={sub.id} className="flex items-center gap-3 group/sub p-2 rounded-lg hover:bg-[hsl(210,25%,16%)] transition-colors">
+                      <button
+                        onClick={() => toggleSubGoal(sub.id)}
+                        className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          sub.completed
+                            ? 'bg-primary border-primary shadow-lg shadow-primary/30'
+                            : 'border-[hsl(210,15%,35%)] hover:border-primary hover:scale-110'
+                        }`}
+                      >
+                        {sub.completed && (
+                          <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                      <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-[hsl(210,15%,40%)]' : 'text-[hsl(210,20%,85%)]'}`}>
+                        {sub.title}
+                      </span>
+                      {/* Priority dots */}
+                      <div className="flex items-center gap-1.5">
+                        {(['low', 'medium', 'high'] as GoalPriority[]).map(p => (
+                          <button
+                            key={p}
+                            onClick={() => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, priority: p } : s))}
+                            className={`h-3 w-3 rounded-full transition-all hover:scale-125 ${
+                              sub.priority === p ? priorityDot[p] + ' ring-2 ring-white/30' : 'bg-[hsl(210,15%,25%)] hover:bg-[hsl(210,15%,35%)]'
+                            }`}
+                            title={p === 'high' ? 'Alta' : p === 'medium' ? 'Media' : 'Baja'}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => removeSubGoal(sub.id)}
+                        className="p-1 rounded-lg text-[hsl(0,60%,50%)] opacity-0 group-hover/sub:opacity-100 hover:bg-[hsl(0,60%,50%,0.2)] transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new subgoal */}
+              <div className="flex items-center gap-2">
+                <input
+                  value={newSubGoalTitle}
+                  onChange={e => setNewSubGoalTitle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addSubGoal()}
+                  placeholder="Escribe un nuevo subobjetivo..."
+                  className="modal-input flex-1"
+                  maxLength={200}
+                />
+                <button
+                  onClick={addSubGoal}
+                  disabled={!newSubGoalTitle.trim()}
+                  className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-105 flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </CollapsibleSection>
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-[hsl(210,25%,16%)] bg-[hsl(215,35%,10%)] px-6 py-4">
+        <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 border-t border-[hsl(210,25%,16%)] bg-gradient-to-br from-[hsl(215,35%,12%)] to-[hsl(215,35%,8%)] px-6 py-4 rounded-b-3xl">
           <button
             onClick={() => onOpenChange(false)}
-            className="rounded-lg px-5 py-2 text-sm font-medium text-[hsl(210,20%,70%)] hover:text-[hsl(210,20%,90%)] hover:bg-[hsl(210,25%,16%)] transition-colors"
+            className="rounded-xl px-5 py-2 text-sm font-semibold text-[hsl(210,20%,70%)] hover:text-[hsl(210,20%,95%)] hover:bg-[hsl(210,25%,16%)] transition-all"
           >
             Cancelar
           </button>
           <button
             onClick={handleSubmit}
             disabled={!form.title.trim()}
-            className="rounded-lg bg-primary px-6 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
+            className="rounded-xl bg-gradient-to-r from-[hsl(200,80%,50%)] to-[hsl(220,80%,55%)] px-6 py-2 text-sm font-bold text-white hover:shadow-lg hover:shadow-primary/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-105"
           >
-            {isEditing ? 'Guardar Cambios' : 'Guardar objetivo'}
+            {isEditing ? '✓ Guardar Cambios' : '✓ Crear Objetivo'}
           </button>
         </div>
       </DialogContent>
@@ -375,11 +441,46 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
   );
 }
 
-function FieldGroup({ label, required, labelSize = 'sm', children }: { label: string; required?: boolean; labelSize?: 'xs' | 'sm'; children: React.ReactNode }) {
+function CollapsibleSection({ title, icon, isOpen, onToggle, badge, children }: { 
+  title: string; 
+  icon: string; 
+  isOpen: boolean; 
+  onToggle: () => void; 
+  badge?: number;
+  children: React.ReactNode 
+}) {
+  return (
+    <div className="border border-[hsl(210,25%,18%)] rounded-xl overflow-hidden bg-[hsl(215,30%,11%)]">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(210,25%,14%)] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">{icon}</span>
+          <span className="text-sm font-semibold text-[hsl(210,20%,85%)]">{title}</span>
+          {badge !== undefined && badge > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+              {badge}
+            </span>
+          )}
+        </div>
+        <ChevronDown className={`h-4 w-4 text-[hsl(210,15%,50%)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="px-4 pb-4 pt-4 animate-fade-in">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldGroup({ label, required, labelSize = 'sm', icon, children }: { label: string; required?: boolean; labelSize?: 'xs' | 'sm'; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
-      <label className={`block mb-1.5 font-medium text-[hsl(200,80%,60%)] ${labelSize === 'xs' ? 'text-[10px] uppercase tracking-wider' : 'text-xs'}`}>
-        {label}{required && <span className="text-[hsl(0,60%,50%)]"> *</span>}
+      <label className={`flex items-center gap-2 mb-2 font-semibold text-[hsl(200,80%,60%)] ${labelSize === 'xs' ? 'text-[11px] uppercase tracking-wider' : 'text-sm'}`}>
+        {icon}
+        {label}{required && <span className="text-[hsl(0,60%,50%)]">*</span>}
       </label>
       {children}
     </div>

@@ -133,13 +133,45 @@
 
 /* Goal Modal custom styles */
 .modal-input {
-  @apply w-full rounded-lg border border-[hsl(210,25%,20%)] bg-[hsl(215,30%,13%)] px-3 py-2.5 text-sm text-[hsl(210,20%,90%)] placeholder:text-[hsl(210,15%,35%)] focus:outline-none focus:ring-2 focus:ring-[hsl(200,80%,50%,0.4)] focus:border-[hsl(200,80%,50%,0.6)] transition-colors;
+  @apply w-full rounded-xl border-2 border-[hsl(210,25%,20%)] bg-[hsl(215,30%,13%)] px-4 py-3 text-sm text-[hsl(210,20%,90%)] placeholder:text-[hsl(210,15%,40%)] focus:outline-none focus:ring-2 focus:ring-[hsl(200,80%,50%,0.5)] focus:border-[hsl(200,80%,50%)] transition-all duration-200 hover:border-[hsl(210,25%,25%)];
 }
 
 .modal-input::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
+  cursor: pointer;
 }
 
-.modal-checkbox {
-  @apply h-4 w-4 rounded border-2 border-[hsl(210,15%,35%)] bg-transparent accent-[hsl(172,50%,36%)] cursor-pointer;
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Scrollbar styling for modal */
+.goal-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.goal-modal::-webkit-scrollbar-track {
+  background: hsl(215, 35%, 10%);
+  border-radius: 10px;
+}
+
+.goal-modal::-webkit-scrollbar-thumb {
+  background: hsl(200, 80%, 50%, 0.3);
+  border-radius: 10px;
+}
+
+.goal-modal::-webkit-scrollbar-thumb:hover {
+  background: hsl(200, 80%, 50%, 0.5);
+}
+

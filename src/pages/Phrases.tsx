@@ -5,6 +5,7 @@ import MetricCard from '@/components/MetricCard';
 import PhraseCard from '@/components/phrases/PhraseCard';
 import PhraseModal from '@/components/phrases/PhraseModal';
 import ReviewModal from '@/components/phrases/ReviewModal';
+import RandomPhraseModal from '@/components/phrases/RandomPhraseModal';
 import { mockPhrases, mockPhraseCategories } from '@/data/mockData';
 import type { Phrase } from '@/types';
 
@@ -15,6 +16,8 @@ export default function Phrases() {
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all');
   const [showPhraseModal, setShowPhraseModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showRandomModal, setShowRandomModal] = useState(false);
+  const [randomPhrase, setRandomPhrase] = useState<Phrase | null>(null);
   const [editingPhrase, setEditingPhrase] = useState<Phrase | null>(null);
 
   const activePhrases = phrases.filter(p => p.active);
@@ -48,13 +51,18 @@ export default function Phrases() {
   };
 
   const handleRandomPhrase = () => {
-    // Mostrar una frase aleatoria
     if (filtered.length === 0) return;
     const randomIndex = Math.floor(Math.random() * filtered.length);
-    const randomPhrase = filtered[randomIndex];
-    console.log('Frase aleatoria:', randomPhrase);
-    // TODO: Implementar modal de frase aleatoria
-    alert(`Frase aleatoria:\n\n"${randomPhrase.text}"\n\n${randomPhrase.author ? `— ${randomPhrase.author}` : ''}`);
+    const selectedPhrase = filtered[randomIndex];
+    setRandomPhrase(selectedPhrase);
+    setShowRandomModal(true);
+  };
+
+  const handleNewRandomPhrase = () => {
+    if (filtered.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * filtered.length);
+    const selectedPhrase = filtered[randomIndex];
+    setRandomPhrase(selectedPhrase);
   };
 
   const getReviewButtonText = () => {
@@ -228,6 +236,15 @@ export default function Phrases() {
         phrases={filtered}
         categories={mockPhraseCategories}
         onReview={handleReview}
+      />
+
+      {/* Random Phrase Modal */}
+      <RandomPhraseModal
+        open={showRandomModal}
+        onOpenChange={setShowRandomModal}
+        phrase={randomPhrase}
+        categories={mockPhraseCategories}
+        onNewRandom={handleNewRandomPhrase}
       />
     </div>
   );

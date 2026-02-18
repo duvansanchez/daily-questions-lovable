@@ -124,3 +124,132 @@ export const mockPhrases: Phrase[] = [
     active: false, reviewCount: 1, createdAt: '2026-01-20',
   },
 ];
+
+// Mock Questions Data
+import type { Question, QuestionResponse, DailyQuestionsSession } from '@/types';
+
+export const mockQuestions: Question[] = [
+  {
+    id: 'q1',
+    title: '¿Cómo te sientes hoy?',
+    description: 'Evalúa tu estado emocional general',
+    type: 'select',
+    category: 'personal',
+    options: [
+      { id: 'opt1', value: 'excelente', label: '😄 Excelente', order: 1 },
+      { id: 'opt2', value: 'bien', label: '🙂 Bien', order: 2 },
+      { id: 'opt3', value: 'regular', label: '😐 Regular', order: 3 },
+      { id: 'opt4', value: 'mal', label: '😔 Mal', order: 4 },
+    ],
+    required: true,
+    active: true,
+    order: 1,
+    createdAt: '2026-01-01T00:00:00',
+  },
+  {
+    id: 'q2',
+    title: '¿Qué hábitos saludables practicaste hoy?',
+    description: 'Selecciona todos los que apliquen',
+    type: 'checkbox',
+    category: 'health',
+    options: [
+      { id: 'opt5', value: 'ejercicio', label: '🏃 Ejercicio físico', order: 1 },
+      { id: 'opt6', value: 'agua', label: '💧 Tomé suficiente agua', order: 2 },
+      { id: 'opt7', value: 'comida', label: '🥗 Comí saludable', order: 3 },
+      { id: 'opt8', value: 'sueno', label: '😴 Dormí bien', order: 4 },
+      { id: 'opt9', value: 'meditacion', label: '🧘 Medité', order: 5 },
+    ],
+    required: false,
+    active: true,
+    order: 2,
+    createdAt: '2026-01-01T00:00:00',
+  },
+  {
+    id: 'q3',
+    title: '¿Cuál fue tu mayor logro del día?',
+    description: 'Describe brevemente tu logro más importante',
+    type: 'text',
+    category: 'goals',
+    required: true,
+    active: true,
+    order: 3,
+    createdAt: '2026-01-01T00:00:00',
+  },
+  {
+    id: 'q4',
+    title: '¿Cuántas horas trabajaste hoy?',
+    description: 'Tiempo dedicado a actividades laborales',
+    type: 'radio',
+    category: 'work',
+    options: [
+      { id: 'opt10', value: '0-4', label: '0-4 horas', order: 1 },
+      { id: 'opt11', value: '4-6', label: '4-6 horas', order: 2 },
+      { id: 'opt12', value: '6-8', label: '6-8 horas', order: 3 },
+      { id: 'opt13', value: '8+', label: 'Más de 8 horas', order: 4 },
+    ],
+    required: false,
+    active: true,
+    order: 4,
+    createdAt: '2026-01-01T00:00:00',
+  },
+  {
+    id: 'q5',
+    title: '¿Qué aprendiste hoy?',
+    description: 'Comparte algo nuevo que hayas aprendido',
+    type: 'text',
+    category: 'personal',
+    required: false,
+    active: true,
+    order: 5,
+    createdAt: '2026-01-01T00:00:00',
+  },
+  {
+    id: 'q6',
+    title: '¿Practicaste algún hábito nuevo?',
+    description: 'Indica si trabajaste en desarrollar nuevos hábitos',
+    type: 'radio',
+    category: 'habits',
+    options: [
+      { id: 'opt14', value: 'si', label: 'Sí', order: 1 },
+      { id: 'opt15', value: 'no', label: 'No', order: 2 },
+    ],
+    required: false,
+    active: true,
+    order: 6,
+    createdAt: '2026-01-01T00:00:00',
+  },
+];
+
+export const mockQuestionResponses: QuestionResponse[] = [
+  {
+    id: 'r1',
+    questionId: 'q1',
+    response: 'bien',
+    answeredAt: '2026-02-18T20:30:00',
+    date: '2026-02-18',
+  },
+  {
+    id: 'r2',
+    questionId: 'q2',
+    response: ['ejercicio', 'agua', 'comida'],
+    answeredAt: '2026-02-18T20:31:00',
+    date: '2026-02-18',
+  },
+  {
+    id: 'r3',
+    questionId: 'q3',
+    response: 'Completé el diseño del nuevo modal de objetivos',
+    answeredAt: '2026-02-18T20:32:00',
+    date: '2026-02-18',
+  },
+];
+
+export const mockDailySessions: DailyQuestionsSession[] = [
+  {
+    id: 'session1',
+    date: '2026-02-18',
+    responses: mockQuestionResponses,
+    totalQuestions: 6,
+    answeredQuestions: 3,
+  },
+];

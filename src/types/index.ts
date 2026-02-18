@@ -74,3 +74,48 @@ export interface Audio {
   lastPlayedAt?: string;
   createdAt: string;
 }
+
+// Question types
+export type QuestionType = 'text' | 'select' | 'checkbox' | 'radio';
+export type QuestionCategory = 'personal' | 'work' | 'health' | 'habits' | 'goals' | 'general';
+
+export interface QuestionOption {
+  id: string;
+  value: string;
+  label: string;
+  order: number;
+}
+
+export interface Question {
+  id: string;
+  title: string;
+  description?: string;
+  type: QuestionType;
+  category: QuestionCategory;
+  options?: QuestionOption[]; // Para select, checkbox, radio
+  required: boolean;
+  active: boolean;
+  order: number;
+  assignedToUsers?: string[]; // IDs de usuarios (para futuro)
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface QuestionResponse {
+  id: string;
+  questionId: string;
+  userId?: string; // Para futuro
+  response: string | string[]; // string para text/select/radio, string[] para checkbox
+  answeredAt: string;
+  date: string; // Fecha del día (YYYY-MM-DD)
+}
+
+export interface DailyQuestionsSession {
+  id: string;
+  date: string; // YYYY-MM-DD
+  userId?: string;
+  responses: QuestionResponse[];
+  completedAt?: string;
+  totalQuestions: number;
+  answeredQuestions: number;
+}

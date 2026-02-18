@@ -9,6 +9,9 @@ import Goals from "./pages/Goals";
 import Phrases from "./pages/Phrases";
 import Audios from "./pages/Audios";
 import Progress from "./pages/Progress";
+import Questions from "./pages/Questions";
+import QuestionsAnswer from "./pages/QuestionsAnswer";
+import QuestionsAdmin from "./pages/QuestionsAdmin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +29,9 @@ const App = () => (
             <Route path="/phrases" element={<Phrases />} />
             <Route path="/audios" element={<Audios />} />
             <Route path="/progress" element={<Progress />} />
+            <Route path="/questions" element={<Questions />} />
+            <Route path="/questions/answer" element={<QuestionsAnswer />} />
+            <Route path="/questions/admin" element={<QuestionsAdmin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

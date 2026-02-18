@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Clock, Edit2, MoreHorizontal, Repeat, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Clock, Edit2, Focus, Repeat, Trash2 } from 'lucide-react';
 import type { Goal } from '@/types';
 import { useState } from 'react';
 
@@ -26,9 +26,10 @@ interface GoalCardProps {
   goal: Goal;
   onEdit?: (id: string) => void;
   onToggle?: (id: string) => void;
+  onFocusGoal?: (goalId: string) => void;
 }
 
-export default function GoalCard({ goal, onToggle, onEdit }: GoalCardProps) {
+export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal }: GoalCardProps) {
   const [expanded, setExpanded] = useState(false);
   const completedSubs = goal.subGoals.filter(s => s.completed).length;
 
@@ -58,6 +59,15 @@ export default function GoalCard({ goal, onToggle, onEdit }: GoalCardProps) {
               {goal.title}
             </h3>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {!goal.completed && (
+                <button
+                  onClick={() => onFocusGoal?.(goal.id)}
+                  className="p-1 rounded hover:bg-primary/10 text-primary"
+                  title="Modo Focus del objetivo"
+                >
+                  <Focus className="h-3.5 w-3.5" />
+                </button>
+              )}
               <button onClick={() => onEdit?.(goal.id)} className="p-1 rounded hover:bg-accent text-muted-foreground"><Edit2 className="h-3.5 w-3.5" /></button>
               <button className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
@@ -112,13 +122,21 @@ export default function GoalCard({ goal, onToggle, onEdit }: GoalCardProps) {
               {expanded && (
                 <div className="mt-2 space-y-1.5 animate-fade-in">
                   {goal.subGoals.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-2 text-xs">
+                    <div key={sub.id} className="group/sub flex items-center gap-2 text-xs p-1.5 rounded-lg hover:bg-accent/50 transition-colors">
                       <div className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center ${
                         sub.completed ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
                       }`}>
                         {sub.completed && <Check className="h-2.5 w-2.5" />}
                       </div>
-                      <span className={sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{sub.title}</span>
+                      <span className={`flex-1 ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                        {sub.title}
+                      </span>
+                      {sub.focusTimeSeconds && sub.focusTimeSeconds > 0 && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <Clock className="h-3 w-3" />
+                          {Math.floor(sub.focusTimeSeconds / 60)}m
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

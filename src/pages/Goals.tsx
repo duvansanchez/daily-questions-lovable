@@ -3,8 +3,10 @@ import { CheckCircle2, Circle, Grid3X3, List, Plus, Target, TrendingUp } from 'l
 import MetricCard from '@/components/MetricCard';
 import GoalCard from '@/components/goals/GoalCard';
 import GoalModal from '@/components/goals/GoalModal';
+import GoalFocusModal from '@/components/goals/GoalFocusModal';
+import FocusModal from '@/components/goals/FocusModal';
 import { mockGoals } from '@/data/mockData';
-import type { Goal, GoalCategory } from '@/types';
+import type { Goal, GoalCategory, SubGoal } from '@/types';
 
 const tabs: { key: GoalCategory | 'all'; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -21,6 +23,11 @@ export default function Goals() {
   const [goals, setGoals] = useState(mockGoals);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [goalFocusOpen, setGoalFocusOpen] = useState(false);
+  const [focusGoal, setFocusGoal] = useState<Goal | null>(null);
+  const [focusModalOpen, setFocusModalOpen] = useState(false);
+  const [focusSubGoal, setFocusSubGoal] = useState<SubGoal | null>(null);
+  const [focusParentGoal, setFocusParentGoal] = useState<Goal | null>(null);
 
   const filtered = activeTab === 'all' ? goals : goals.filter(g => g.category === activeTab);
   const daily = goals.filter(g => g.category === 'daily');
@@ -91,6 +98,109 @@ export default function Goals() {
       };
       setGoals(prev => [newGoal, ...prev]);
     }
+  };
+
+  const handleOpenGoalFocus = (goalId: string) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    setFocusGoal(goal);
+    setGoalFocusOpen(true);
+  };
+
+  const handleOpenSubGoalFocusFromGoal = (subGoalId: string) => {
+    if (!focusGoal) return;
+
+    const subGoal = focusGoal.subGoals.find(s => s.id === subGoalId);
+    if (!subGoal) return;
+
+    setFocusParentGoal(focusGoal);
+    setFocusSubGoal(subGoal);
+    setGoalFocusOpen(false);
+    setFocusModalOpen(true);
+  };
+
+  const handleFocusSubGoal = (goalId: string, subGoalId: string) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    
+    const subGoal = goal.subGoals.find(s => s.id === subGoalId);
+    if (!subGoal) return;
+    
+    setFocusParentGoal(goal);
+    setFocusSubGoal(subGoal);
+    setFocusModalOpen(true);
+  };
+
+  const handleSaveGoalFocusProgress = (goalId: string, updates: { subGoals: SubGoal[]; focusTimeSeconds: number; focusNotes: string }) => {
+    setGoals(prev => prev.map(g =>
+      g.id === goalId
+        ? {
+            ...g,
+            subGoals: updates.subGoals,
+            focusTimeSeconds: updates.focusTimeSeconds,
+            focusNotes: updates.focusNotes,
+          }
+        : g
+    ));
+
+    setFocusGoal(prev => prev && prev.id === goalId
+      ? {
+          ...prev,
+          subGoals: updates.subGoals,
+          focusTimeSeconds: updates.focusTimeSeconds,
+          focusNotes: updates.focusNotes,
+        }
+      : prev
+    );
+  };
+
+  const handleCompleteGoalFromFocus = (goalId: string) => {
+    setGoals(prev => prev.map(g =>
+      g.id === goalId
+        ? { ...g, completed: true, completedAt: new Date().toISOString() }
+        : g
+    ));
+  };
+
+  const handleSaveFocusProgress = (subGoalId: string, updates: Partial<SubGoal>) => {
+    if (!focusParentGoal) return;
+    
+    setGoals(prev => prev.map(g => 
+      g.id === focusParentGoal.id
+        ? {
+            ...g,
+            subGoals: g.subGoals.map(s =>
+              s.id === subGoalId ? { ...s, ...updates } : s
+            )
+          }
+        : g
+    ));
+    
+    // Actualizar también el estado local del subobjetivo en focus
+    if (focusSubGoal && focusSubGoal.id === subGoalId) {
+      setFocusSubGoal(prev => prev ? { ...prev, ...updates } : null);
+    }
+  };
+
+  const handleCompleteSubGoal = (subGoalId: string) => {
+    if (!focusParentGoal) return;
+    
+    setGoals(prev => prev.map(g => 
+      g.id === focusParentGoal.id
+        ? {
+            ...g,
+            subGoals: g.subGoals.map(s =>
+              s.id === subGoalId 
+                ? { ...s, completed: true, completedAt: new Date().toISOString() } 
+                : s
+            ).sort((a, b) => {
+              // Ordenar: no completados primero, completados al final
+              if (a.completed !== b.completed) return a.completed ? 1 : -1;
+              return 0;
+            })
+          }
+        : g
+    ));
   };
 
   const sorted = [...filtered].sort((a, b) => {
@@ -166,7 +276,13 @@ export default function Goals() {
         : 'space-y-3'
       }>
         {sorted.map(goal => (
-          <GoalCard key={goal.id} goal={goal} onToggle={handleToggle} onEdit={handleEdit} />
+          <GoalCard 
+            key={goal.id} 
+            goal={goal} 
+            onToggle={handleToggle} 
+            onEdit={handleEdit}
+            onFocusGoal={handleOpenGoalFocus}
+          />
         ))}
       </div>
 
@@ -185,6 +301,32 @@ export default function Goals() {
         goal={editingGoal}
         goals={goals}
         onSave={handleSave}
+      />
+
+      <GoalFocusModal
+        open={goalFocusOpen}
+        onOpenChange={setGoalFocusOpen}
+        goal={focusGoal}
+        onSave={handleSaveGoalFocusProgress}
+        onComplete={handleCompleteGoalFromFocus}
+        onOpenSubGoalFocus={handleOpenSubGoalFocusFromGoal}
+      />
+
+      {/* Focus Modal */}
+      <FocusModal
+        open={focusModalOpen}
+        onOpenChange={(open) => {
+          setFocusModalOpen(open);
+          if (!open && focusParentGoal) {
+            const updatedParent = goals.find(g => g.id === focusParentGoal.id) || focusParentGoal;
+            setFocusGoal(updatedParent);
+            setGoalFocusOpen(true);
+          }
+        }}
+        subGoal={focusSubGoal}
+        parentGoal={focusParentGoal}
+        onSave={handleSaveFocusProgress}
+        onComplete={handleCompleteSubGoal}
       />
     </div>
   );

@@ -9,6 +9,7 @@ export interface SubGoal {
   notes?: string;
   completedAt?: string;
   priority?: GoalPriority;
+  focusTimeSeconds?: number; // Tiempo acumulado en modo focus
 }
 
 export interface Goal {
@@ -29,6 +30,8 @@ export interface Goal {
   subGoals: SubGoal[];
   completed: boolean;
   completedAt?: string;
+  focusTimeSeconds?: number;
+  focusNotes?: string;
   skipped: boolean;
   createdAt: string;
   scheduledFor?: string;

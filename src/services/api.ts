@@ -31,8 +31,13 @@ export const goalsAPI = {
       },
       body: JSON.stringify(goalData),
     });
-    if (!response.ok) throw new Error('Error creating goal');
-    return response.json();
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Error creating goal: ${response.status} ${errorData}`);
+    }
+    const data = await response.json();
+    console.log('🎯 Goal API Response:', data);
+    return data;
   },
   
   updateGoal: async (goalId: number | string, updates: Record<string, unknown>) => {

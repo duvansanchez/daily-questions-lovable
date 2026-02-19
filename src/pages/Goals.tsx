@@ -329,6 +329,8 @@ export default function Goals() {
       
       try {
         const createdGoal = await goalsAPI.createGoal(createPayload);
+        console.log('✅ Goal created:', createdGoal);
+        
         const newGoal: Goal = {
           id: createdGoal.id,
           title: data.title,
@@ -351,8 +353,21 @@ export default function Goals() {
           scheduledFor: data.scheduledType === 'specific' ? data.scheduledDate : undefined,
         };
         setGoals(prev => [newGoal, ...prev]);
+        
+        // Recargar objetivos desde BD para sincronizar
+        setTimeout(async () => {
+          try {
+            const response = await goalsAPI.getGoals(1, 100);
+            setGoals(response.items || []);
+            console.log('✅ Goals reloaded from DB');
+          } catch (reloadError) {
+            console.warn('Could not reload goals:', reloadError);
+          }
+        }, 500);
+        
       } catch (error) {
-        console.error('Error creating goal:', error);
+        console.error('❌ Error creating goal:', error);
+        alert(`Error al crear objetivo: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   };

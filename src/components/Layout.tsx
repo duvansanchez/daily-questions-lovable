@@ -1,12 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Target, BookOpen, Headphones, BarChart3, Menu, X, Sparkles, MessageCircleQuestion } from 'lucide-react';
+import { Target, BookOpen, BarChart3, Menu, X, Sparkles, MessageCircleQuestion } from 'lucide-react';
 import { useState } from 'react';
 
 const navItems = [
   { to: '/goals', label: 'Objetivos', icon: Target },
   { to: '/questions', label: 'Preguntas', icon: MessageCircleQuestion },
   { to: '/phrases', label: 'Frases', icon: BookOpen },
-  { to: '/audios', label: 'Audios', icon: Headphones },
   { to: '/progress', label: 'Progreso', icon: BarChart3 },
 ];
 

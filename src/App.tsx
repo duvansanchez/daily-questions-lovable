@@ -8,7 +8,6 @@ import Index from "./pages/Index";
 import Goals from "./pages/Goals";
 import Phrases from "./pages/Phrases";
 import PhrasesCategories from "./pages/PhrasesCategories";
-import Audios from "./pages/Audios";
 import Progress from "./pages/Progress";
 import Questions from "./pages/Questions";
 import QuestionsAnswer from "./pages/QuestionsAnswer";
@@ -29,7 +28,6 @@ const App = () => (
             <Route path="/goals" element={<Goals />} />
             <Route path="/phrases" element={<Phrases />} />
             <Route path="/phrases/categories" element={<PhrasesCategories />} />
-            <Route path="/audios" element={<Audios />} />
             <Route path="/progress" element={<Progress />} />
             <Route path="/questions" element={<Questions />} />
             <Route path="/questions/answer" element={<QuestionsAnswer />} />

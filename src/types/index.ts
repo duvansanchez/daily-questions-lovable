@@ -66,18 +66,6 @@ export interface Phrase {
   createdAt: string;
 }
 
-export interface Audio {
-  id: string;
-  title: string;
-  fileUrl: string;
-  categoryId: string;
-  subcategoryId: string;
-  notes?: string;
-  playCount: number;
-  lastPlayedAt?: string;
-  createdAt: string;
-}
-
 // Question types
 export type QuestionType = 'text' | 'select' | 'checkbox' | 'radio';
 export type QuestionCategory = 'personal' | 'work' | 'health' | 'habits' | 'goals' | 'general';

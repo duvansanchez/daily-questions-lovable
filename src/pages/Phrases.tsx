@@ -95,18 +95,20 @@ export default function Phrases() {
     loadData();
   }, []);
 
-  const activePhrases = phrases.filter(p => p.active);
-  const totalReviews = phrases.reduce((sum, p) => sum + p.reviewCount, 0);
-  const reviewedToday = phrases.filter(p => {
-    if (!p.lastReviewedAt) return false;
-    return new Date(p.lastReviewedAt).toDateString() === new Date().toDateString();
-  }).length;
-
+  // Filtrar frases según categoría y subcategoría seleccionadas
   const filtered = phrases.filter(p => {
     if (selectedCategory !== 'all' && p.categoryId !== selectedCategory) return false;
     if (selectedSubcategory !== 'all' && p.subcategoryId !== selectedSubcategory) return false;
     return true;
   });
+
+  // Métricas dinámicas basadas en el filtro actual
+  const filteredActive = filtered.filter(p => p.active);
+  const filteredTotalReviews = filtered.reduce((sum, p) => sum + p.reviewCount, 0);
+  const filteredReviewedToday = filtered.filter(p => {
+    if (!p.lastReviewedAt) return false;
+    return new Date(p.lastReviewedAt).toDateString() === new Date().toDateString();
+  }).length;
 
   const currentCategory = categories.find(c => c.id === selectedCategory);
   const subcategories = currentCategory?.subcategories ?? [];
@@ -232,9 +234,9 @@ export default function Phrases() {
 
       {/* Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
-        <MetricCard title="Total" value={phrases.length} icon={BookOpen} color="primary" subtitle={`${activePhrases.length} activas`} />
-        <MetricCard title="Hoy" value={reviewedToday} icon={Eye} color="success" subtitle="Repasadas" />
-        <MetricCard title="Total repasos" value={totalReviews} icon={RefreshCw} color="warning" />
+        <MetricCard title="Total" value={filtered.length} icon={BookOpen} color="primary" subtitle={`${filteredActive.length} activas`} />
+        <MetricCard title="Hoy" value={filteredReviewedToday} icon={Eye} color="success" subtitle="Repasadas" />
+        <MetricCard title="Total repasos" value={filteredTotalReviews} icon={RefreshCw} color="warning" />
         <MetricCard title="Categorías" value={categories.length} icon={Filter} color="primary" />
       </div>
 

@@ -54,7 +54,7 @@ class Goal(Base):
     __tablename__ = "objetivos"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=True)  # Temporal: nullable para desarrollo sin usuario autenticado
+    user_id = Column(Integer, nullable=True)  # TODO: Será FK a User cuando autenticación esté implementada
     titulo = Column(String(255), nullable=False)
     descripcion = Column(Text, nullable=True)
     prioridad = Column(String(20), nullable=True)

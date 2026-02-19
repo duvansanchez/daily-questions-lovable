@@ -63,8 +63,11 @@ Nota clave: el frontend ya construido es el de la nueva version (no el legacy). 
 - Documentacion OpenAPI activa
 
 ## IDs y compatibilidad
-- Si la BD actual usa IDs int, mantenerlos para no romper datos.
-- No mezclar int y UUID sin plan de migracion.
+- **Estrategia de ID**: Integer autoincrement generado por SQL Server
+- No generar UUIDs en la aplicación (evita desincronización con BD)
+- No mezclar int y UUID; mantener consistencia Integer en todas las relaciones
+- Las relaciones usan Integer FK directo a las columnas PK existentes
+- Excepción: `daily_sessions` usa VARCHAR(36) como PK (identificador de sesión)
 
 ## Paginacion y filtrado desde el inicio
 - Para listas: preguntas, frases, objetivos; evitar cargas pesadas.
@@ -83,14 +86,18 @@ Nota clave: el frontend ya construido es el de la nueva version (no el legacy). 
 ## Contrato base de datos y endpoints
 Ver archivo: backend-contrato-fastapi.md
 
-## Mapa BD actual -> modelos nuevos (pendiente de completar con el esquema real)
-Este bloque debe completarse cuando la IA tenga acceso al esquema real de SQL Server.
-- Tabla legacy: question -> Modelo nuevo: Question
-- Tabla legacy: response -> Modelo nuevo: QuestionResponse
-- Tabla legacy: user (si existe) -> Ignorar por ahora (sin auth)
-- Tablas nuevas sugeridas (si no existen): goals, subgoals, phrases, phrase_categories, phrase_subcategories, daily_sessions
+## Mapa BD actual -> modelos nuevos (esquema SQL Server CONFIRMADO)
+Tablas existentes - mapeo directo a ORM:
+- Tabla BD: **objetivos** (Integer PK autoincrement) -> Modelo: `Goal`
+- Tabla BD: **categorias** (Integer PK autoincrement) -> Modelo: `PhraseCategory`
+- Tabla BD: **frases** (Integer PK autoincrement) -> Modelo: `Phrase`
+- Tabla BD: **subcategorias** (Integer PK autoincrement) -> Modelo: `PhraseSubcategory`
+- Tabla BD: **question** (Integer PK autoincrement) -> Modelo: `Question`
+- Tabla BD: **response** (Integer PK autoincrement) -> Modelo: `QuestionResponse`
+- Tabla BD: **question_option** (Integer PK autoincrement) -> Modelo: `QuestionOption`
+- Tabla BD: **daily_sessions** (VARCHAR(36) PK) -> Modelo: `DailyQuestionsSession`
 
-Regla: si una tabla ya existe, mapear a ese nombre y columnas existentes. No crear duplicados.
+**Regla crítica**: Todos los IDs son Integer autoincrement generados por SQL Server. NO generar UUIDs en la aplicación. Las relaciones usan Integer foreign keys directos.
 
 ## Campos obligatorios y defaults
 Cuando el esquema legacy no tenga un campo necesario:
@@ -105,6 +112,29 @@ Ejemplos:
 - Phrase.active -> default true
 - Goal.completed -> default false
 - SubGoal.completed -> default false
+
+## Generación de IDs en la aplicación
+**Patrón correcto** (sin uuid4):
+```python
+# ✅ CORRECTO - dejar que BD genere el ID
+db_goal = Goal(
+    title="Mi objetivo",
+    description="Descripción",
+    completed=False
+)
+db.add(db_goal)
+db.commit()
+# El ID se asigna automáticamente por SQL Server autoincrement
+```
+
+**Patrón incorrecto** (NO usar):
+```python
+# ❌ INCORRECTO - no generar UUIDs en la app
+db_goal = Goal(
+    id=str(uuid4()),  # Nunca hacer esto
+    title="Mi objetivo"
+)
+```
 
 ## Flujos criticos de prueba (minimos)
 1) Crear objetivo con subobjetivos

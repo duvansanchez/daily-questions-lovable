@@ -24,7 +24,7 @@ class GoalService:
                 objetivo_padre_id = goal.objetivo_padre_id
         
         db_goal = Goal(
-            user_id=1,  # Default user_id, será parametrizado después
+            user_id=1,  # Default user_id, asegúrate de que el usuario con ID 1 existe en la DB
             titulo=goal.titulo,
             descripcion=goal.descripcion,
             categoria=goal.categoria,

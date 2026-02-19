@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api import api_router
+from app.utils.init_db import init_database
 
 # Crear aplicación
 app = FastAPI(
@@ -13,6 +14,9 @@ app = FastAPI(
     version=settings.API_VERSION,
     description="API para Daily Questions - Gestión de objetivos, frases y preguntas diarias"
 )
+
+# Inicializar base de datos
+init_database()
 
 # Configurar CORS
 app.add_middleware(

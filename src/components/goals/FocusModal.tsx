@@ -18,6 +18,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
   const [seconds, setSeconds] = useState(0);
   const [notes, setNotes] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
   
   const intervalRef = useRef<number | null>(null);
@@ -32,6 +33,8 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
       setNotes(subGoal.notes || '');
       setTimerState('idle');
       setHasUnsavedChanges(false);
+      setIsEditingNotes(false);
+      setHeadingMenuOpen(false);
     }
   }, [open, subGoal]);
 
@@ -407,126 +410,142 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
 
           {/* Notes Section */}
           <div className="mb-6">
-            <label className="block text-sm font-semibold text-foreground mb-2">
-              Notas de la sesión
-            </label>
-
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-semibold text-foreground">
+                Notas de la sesión
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingNotes(prev => !prev);
+                  if (isEditingNotes) {
+                    setHeadingMenuOpen(false);
+                  }
+                }}
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+              >
+                {isEditingNotes ? 'Cerrar edición' : 'Editar'}
+              </button>
+            </div>
             <div className="space-y-3">
-              {/* Editor con Toolbar */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
-                {/* Toolbar */}
-                <div className="flex items-center gap-0.5 p-2 border-b border-border bg-muted/30">
-                  <button
-                    onClick={toggleBold}
-                    className="p-2 rounded hover:bg-accent transition-colors"
-                    title="Negrita (Ctrl+B)"
-                  >
-                    <Bold className="h-4 w-4" />
-                  </button>
-                  
-                  <button
-                    onClick={toggleItalic}
-                    className="p-2 rounded hover:bg-accent transition-colors"
-                    title="Cursiva (Ctrl+I)"
-                  >
-                    <Italic className="h-4 w-4" />
-                  </button>
-
-                  <div className="h-6 w-px bg-border mx-1" />
-
-                  {/* Dropdown de encabezados */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
-                      className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1"
-                      title="Encabezados"
-                    >
-                      <Heading1 className="h-4 w-4" />
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    
-                    {headingMenuOpen && (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-10" 
-                          onClick={() => setHeadingMenuOpen(false)}
-                        />
-                        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-20 min-w-[140px]">
-                          <button
-                            onClick={() => insertHeading(1)}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                          >
-                            <Heading1 className="h-4 w-4" />
-                            Título 1
-                          </button>
-                          <button
-                            onClick={() => insertHeading(2)}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                          >
-                            <Heading2 className="h-4 w-4" />
-                            Título 2
-                          </button>
-                          <button
-                            onClick={() => insertHeading(3)}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                          >
-                            <Heading3 className="h-4 w-4" />
-                            Título 3
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="h-6 w-px bg-border mx-1" />
-
-                  <button
-                    onClick={insertCheckbox}
-                    className="p-2 rounded hover:bg-accent transition-colors"
-                    title="Checkbox"
-                  >
-                    <ListChecks className="h-4 w-4" />
-                  </button>
-
-                  <button
-                    onClick={insertBulletList}
-                    className="p-2 rounded hover:bg-accent transition-colors"
-                    title="Lista con viñetas"
-                  >
-                    <List className="h-4 w-4" />
-                  </button>
-
-                  <div className="h-6 w-px bg-border mx-1" />
-
-                  <button
-                    onClick={insertCodeBlock}
-                    className="p-2 rounded hover:bg-accent transition-colors"
-                    title="Bloque de código"
-                  >
-                    <Code className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {/* Textarea */}
-                <textarea
-                  ref={textareaRef}
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Escribe tus notas, ideas o reflexiones durante esta sesión de focus..."
-                  className="w-full min-h-[120px] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-y bg-transparent"
-                  maxLength={2000}
-                />
-              </div>
-
-              {/* Preview en tiempo real */}
-              {notes && (
-                <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 min-h-[80px]">
-                  <div className="text-xs font-semibold text-muted-foreground mb-2">Vista previa:</div>
+              {/* Preview (siempre visible primero) */}
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 min-h-[80px]">
+                <div className="text-xs font-semibold text-muted-foreground mb-2">Vista previa:</div>
+                {notes.trim() ? (
                   <div 
                     className="prose prose-sm max-w-none text-foreground"
                     dangerouslySetInnerHTML={{ __html: renderPreview(notes) }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aún no hay contenido para previsualizar.</p>
+                )}
+              </div>
+
+              {isEditingNotes && (
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  {/* Toolbar */}
+                  <div className="flex items-center gap-0.5 p-2 border-b border-border bg-muted/30">
+                    <button
+                      onClick={toggleBold}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Negrita (Ctrl+B)"
+                    >
+                      <Bold className="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      onClick={toggleItalic}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Cursiva (Ctrl+I)"
+                    >
+                      <Italic className="h-4 w-4" />
+                    </button>
+
+                    <div className="h-6 w-px bg-border mx-1" />
+
+                    {/* Dropdown de encabezados */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
+                        className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1"
+                        title="Encabezados"
+                      >
+                        <Heading1 className="h-4 w-4" />
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      
+                      {headingMenuOpen && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setHeadingMenuOpen(false)}
+                          />
+                          <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-20 min-w-[140px]">
+                            <button
+                              onClick={() => insertHeading(1)}
+                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
+                            >
+                              <Heading1 className="h-4 w-4" />
+                              Título 1
+                            </button>
+                            <button
+                              onClick={() => insertHeading(2)}
+                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
+                            >
+                              <Heading2 className="h-4 w-4" />
+                              Título 2
+                            </button>
+                            <button
+                              onClick={() => insertHeading(3)}
+                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
+                            >
+                              <Heading3 className="h-4 w-4" />
+                              Título 3
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="h-6 w-px bg-border mx-1" />
+
+                    <button
+                      onClick={insertCheckbox}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Checkbox"
+                    >
+                      <ListChecks className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={insertBulletList}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Lista con viñetas"
+                    >
+                      <List className="h-4 w-4" />
+                    </button>
+
+                    <div className="h-6 w-px bg-border mx-1" />
+
+                    <button
+                      onClick={insertCodeBlock}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Bloque de código"
+                    >
+                      <Code className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Textarea */}
+                  <textarea
+                    ref={textareaRef}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Escribe tus notas, ideas o reflexiones durante esta sesión de focus..."
+                    className="w-full min-h-[120px] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-y bg-transparent"
+                    maxLength={2000}
                   />
                 </div>
               )}

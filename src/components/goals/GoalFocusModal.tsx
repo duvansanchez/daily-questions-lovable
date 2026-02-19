@@ -185,9 +185,9 @@ export default function GoalFocusModal({
         </div>
 
         {/* Timer */}
-        <div className="mb-8 rounded-2xl bg-gradient-to-br from-[hsl(210,25%,14%)] to-[hsl(210,25%,12%)] border border-[hsl(210,30%,18%)] p-8">
+        <div className="mb-8 rounded-2xl bg-gradient-to-br from-[hsl(210,25%,14%)] to-[hsl(210,25%,12%)] border border-[hsl(210,30%,18%)] p-8 overflow-hidden">
           <div className="text-center">
-            <div className="text-6xl font-mono font-bold text-primary mb-6 tracking-tight" style={{ wordWrap: 'break-word', maxWidth: '100%' }}>
+            <div className="text-6xl font-mono font-bold text-primary mb-6 tracking-tight" style={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}>
               {formatTime(seconds)}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3">

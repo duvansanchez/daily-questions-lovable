@@ -311,7 +311,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
   if (!open || !subGoal || !parentGoal) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background animate-fade-in">
+    <div className="fixed inset-0 z-50 bg-background animate-fade-in overflow-y-auto">
       {/* Header */}
       <div className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
@@ -352,7 +352,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 h-[calc(100vh-180px)] flex items-center justify-center">
+      <div className="container mx-auto px-4 min-h-[calc(100vh-180px)] py-8 flex items-start justify-center">
         <div className="w-full max-w-3xl">
           {/* Subgoal Title */}
           <div className="text-center mb-8">
@@ -372,9 +372,9 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
 
           {/* Timer Display */}
           <div className="mb-8">
-            <div className="relative rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-12 border border-blue-500/20">
+            <div className="relative rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-12 border border-blue-500/20 overflow-hidden">
               <div className="text-center">
-                <div className="text-7xl font-mono font-bold text-foreground mb-4 tracking-tight" style={{ wordWrap: 'break-word', maxWidth: '100%' }}>
+                <div className="text-7xl font-mono font-bold text-foreground mb-4 tracking-tight" style={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}>
                   {formatTime(seconds)}
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-3">

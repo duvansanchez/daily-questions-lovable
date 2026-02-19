@@ -79,6 +79,34 @@ export const goalsAPI = {
     if (!response.ok) throw new Error('Error updating subgoal');
     return response.json();
   },
+
+  createSubGoal: async (goalId: number | string, subGoalData: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/goals/${goalId}/subgoals`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(subGoalData),
+    });
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Error creating subgoal: ${response.status} ${errorData}`);
+    }
+    const data = await response.json();
+    console.log('✅ SubGoal created:', data);
+    return data;
+  },
+
+  deleteSubGoal: async (subGoalId: number | string) => {
+    const response = await fetch(`${API_BASE_URL}/subgoals/${subGoalId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) throw new Error('Error deleting subgoal');
+    return response.json();
+  },
 };
 
 /**

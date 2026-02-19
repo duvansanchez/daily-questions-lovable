@@ -349,6 +349,31 @@ export default function Goals() {
         const createdGoal = await goalsAPI.createGoal(createPayload);
         console.log('✅ Goal created:', createdGoal);
         
+        // Crear subobjetivos nuevos en el backend
+        const newSubGoals: SubGoal[] = [];
+        for (const subGoal of data.subGoals) {
+          if (subGoal.id.startsWith('new-')) {
+            try {
+              const createdSubGoal = await goalsAPI.createSubGoal(createdGoal.id, {
+                titulo: subGoal.title,
+                completado: subGoal.completed || false,
+                notas: subGoal.notes || null,
+              });
+              console.log('✅ SubGoal created:', createdSubGoal);
+              newSubGoals.push({
+                id: createdSubGoal.id,
+                title: subGoal.title,
+                completed: subGoal.completed || false,
+                notes: subGoal.notes,
+              });
+            } catch (subError) {
+              console.error('❌ Error creating subgoal:', subError);
+            }
+          } else {
+            newSubGoals.push(subGoal);
+          }
+        }
+        
         const newGoal: Goal = {
           id: createdGoal.id,
           title: data.title,
@@ -364,7 +389,7 @@ export default function Goals() {
           parentGoalId: data.parentGoalId || undefined,
           startDate: data.startDate || undefined,
           endDate: data.endDate || undefined,
-          subGoals: data.subGoals,
+          subGoals: newSubGoals,
           completed: false,
           skipped: false,
           createdAt: createdGoal.fecha_creacion || new Date().toISOString(),

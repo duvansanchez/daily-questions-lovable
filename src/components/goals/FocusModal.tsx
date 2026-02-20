@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Pause, Play, RotateCcw, Save, X, Bold, Italic, List, ListChecks, Code, Heading1, Heading2, Heading3 } from 'lucide-react';
+import { CheckCircle2, Pause, Play, RotateCcw, Save, X, Bold, Italic, List, ListChecks, Code, Heading1, Heading2, Heading3, Minus } from 'lucide-react';
 import type { SubGoal, Goal } from '../../types';
 
 interface FocusModalProps {
@@ -239,6 +239,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
   const insertCheckbox = () => insertAtLine('- [ ] ');
   const insertBulletList = () => insertAtLine('- ');
   const insertCodeBlock = () => insertFormatting('\n```\n', '\n```\n');
+  const insertDivider = () => insertAtLine('\n---\n');
 
   const insertHeading = (level: 1 | 2 | 3) => {
     const prefix = '#'.repeat(level) + ' ';
@@ -291,8 +292,12 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
     for (let line of lines) {
       let processed = line;
       
+      // Horizontal rule (línea divisoria)
+      if (processed.trim() === '---' || processed.trim() === '***' || processed.trim() === '___') {
+        processed = '<hr class="my-2 border-t border-border" />';
+      }
       // Headers
-      if (processed.startsWith('### ')) {
+      else if (processed.startsWith('### ')) {
         processed = `<h3 class="text-lg font-semibold mb-2 mt-4">${processHighlights(processed.slice(4))}</h3>`;
       } else if (processed.startsWith('## ')) {
         processed = `<h2 class="text-xl font-semibold mb-2 mt-4">${processHighlights(processed.slice(3))}</h2>`;
@@ -308,7 +313,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
           let formatted = content.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
           formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
           formatted = processHighlights(formatted);
-          processed = `<div class="flex items-center gap-2 my-1"><input type="checkbox" checked disabled class="rounded border-gray-400 w-4 h-4" /><span class="line-through text-muted-foreground">${formatted || '&nbsp;'}</span></div>`;
+          processed = `<div class="flex items-center gap-2 mb-0.5"><input type="checkbox" checked disabled class="rounded border-gray-400 w-4 h-4" /><span class="line-through text-muted-foreground">${formatted || '&nbsp;'}</span></div>`;
         }
       }
       // Checkboxes (sin marcar) - con o sin contenido
@@ -320,7 +325,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
           let formatted = content.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
           formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
           formatted = processHighlights(formatted);
-          processed = `<div class="flex items-center gap-2 my-1"><input type="checkbox" disabled class="rounded border-gray-400 w-4 h-4" /><span>${formatted || '&nbsp;'}</span></div>`;
+          processed = `<div class="flex items-center gap-2 mb-0.5"><input type="checkbox" disabled class="rounded border-gray-400 w-4 h-4" /><span>${formatted || '&nbsp;'}</span></div>`;
         }
       }
       // Bullet lists
@@ -645,6 +650,16 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
                       title="Bloque de código"
                     >
                       <Code className="h-4 w-4" />
+                    </button>
+
+                    <div className="h-6 w-px bg-border mx-1" />
+
+                    <button
+                      onClick={insertDivider}
+                      className="p-2 rounded hover:bg-accent transition-colors"
+                      title="Línea divisoria"
+                    >
+                      <Minus className="h-4 w-4" />
                     </button>
                   </div>
 

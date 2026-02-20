@@ -436,6 +436,7 @@ export default function Goals() {
     const subGoal = focusGoal.subGoals.find(s => s.id === subGoalId);
     if (!subGoal) return;
 
+    // Usar focusGoal actualizado como parent
     setFocusParentGoal(focusGoal);
     setFocusSubGoal(subGoal);
     setGoalFocusOpen(false);
@@ -676,11 +677,35 @@ export default function Goals() {
       {/* Focus Modal */}
       <FocusModal
         open={focusModalOpen}
-        onOpenChange={(open) => {
+        onOpenChange={async (open) => {
           setFocusModalOpen(open);
           if (!open && focusParentGoal) {
-            const updatedParent = goals.find(g => g.id === focusParentGoal.id) || focusParentGoal;
-            setFocusGoal(updatedParent);
+            // Al cerrar el focus del subobjetivo, refrescar desde el backend para obtener el orden correcto
+            try {
+              const subgoalsData = await goalsAPI.getSubGoals(focusParentGoal.id);
+              const mappedSubgoals = subgoalsData
+                .map((sub: any): SubGoal => ({
+                  id: sub.id.toString(),
+                  title: sub.titulo,
+                  completed: sub.completado || false,
+                  notes: sub.notas || undefined,
+                  completedAt: sub.fecha_completado || undefined,
+                  priority: undefined,
+                  focusTimeSeconds: sub.tiempo_focus || 0,
+                }))
+                .sort((a, b) => {
+                  const orderA = subgoalsData.find((s: any) => s.id.toString() === a.id)?.orden || 0;
+                  const orderB = subgoalsData.find((s: any) => s.id.toString() === b.id)?.orden || 0;
+                  return orderA - orderB;
+                });
+              
+              const updatedParent = { ...focusParentGoal, subGoals: mappedSubgoals };
+              setFocusGoal(updatedParent);
+            } catch (error) {
+              console.warn('Could not refresh subgoals:', error);
+              const updatedParent = goals.find(g => g.id === focusParentGoal.id) || focusParentGoal;
+              setFocusGoal(updatedParent);
+            }
             setGoalFocusOpen(true);
           }
         }}

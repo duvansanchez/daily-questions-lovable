@@ -31,16 +31,20 @@ class SubGoalService:
     @staticmethod
     def create_subgoal(db: Session, objetivo_id: int, subgoal: SubGoalCreate) -> SubGoal:
         """Crear nuevo subobjetivo."""
-        # Obtener el máximo orden actual para este objetivo
-        max_orden = db.query(SubGoal).filter(
-            SubGoal.objetivo_id == objetivo_id
-        ).count()
+        # Si no se especifica orden, obtener el máximo orden actual + 1
+        if subgoal.orden is not None:
+            orden = subgoal.orden
+        else:
+            max_orden = db.query(SubGoal).filter(
+                SubGoal.objetivo_id == objetivo_id
+            ).count()
+            orden = max_orden
         
         db_subgoal = SubGoal(
             objetivo_id=objetivo_id,
             titulo=subgoal.titulo,
             completado=subgoal.completado,
-            orden=subgoal.orden if subgoal.orden else max_orden + 1,
+            orden=orden,
             tiempo_focus=subgoal.tiempo_focus or 0,
             notas=subgoal.notas
         )

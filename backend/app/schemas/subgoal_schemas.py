@@ -11,7 +11,7 @@ class SubGoalBase(BaseModel):
     """Base para subobjetivos."""
     titulo: str = Field(..., min_length=1, max_length=255)
     completado: bool = False
-    orden: int = 0
+    orden: Optional[int] = None
     tiempo_focus: Optional[int] = 0
     notas: Optional[str] = None
 
@@ -35,6 +35,7 @@ class SubGoalResponse(SubGoalBase):
     id: int
     objetivo_id: int
     fecha_creacion: Optional[datetime] = None
+    orden: Optional[int] = None
     
     class Config:
         from_attributes = True

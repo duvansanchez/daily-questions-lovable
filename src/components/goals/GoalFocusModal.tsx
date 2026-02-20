@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Focus, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { CheckCircle2, Focus, Pause, Play, RotateCcw, X, GripVertical } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import type { SubGoal, Goal } from '@/types';
 
 interface GoalFocusModalProps {
@@ -111,6 +112,28 @@ export default function GoalFocusModal({
     if (goal) {
       onSave(goal.id, { subGoals: nextSubGoals, focusTimeSeconds: seconds, focusNotes: notes.trim() });
     }
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    const { source, destination } = result;
+    
+    // Si se soltó fuera de una zona droppable
+    if (!destination) return;
+    
+    // Si la posición no cambió
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
+    }
+
+    const newSubGoals = Array.from(subGoals);
+    const [removed] = newSubGoals.splice(source.index, 1);
+    newSubGoals.splice(destination.index, 0, removed);
+    
+    setSubGoals(newSubGoals);
+    setHasUnsavedChanges(true);
   };
 
   const formatTime = (totalSeconds: number) => {
@@ -265,54 +288,90 @@ export default function GoalFocusModal({
           </div>
 
           {/* Subgoals list */}
-          <div className="space-y-2">
-            {subGoals.map(sub => {
-              const checklistCounts = getChecklistCounts(sub.notes);
-              return (
-              <div
-                key={sub.id}
-                className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/30 transition-colors group"
-              >
-                <button
-                  onClick={() => toggleSubGoal(sub.id)}
-                  className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
-                    sub.completed
-                      ? 'bg-primary border-primary'
-                      : 'border-input hover:border-primary'
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="subgoals-list">
+              {(provided, snapshot) => (
+                <div
+                  className={`space-y-2 rounded-xl p-3 transition-colors ${
+                    snapshot.isDraggingOver 
+                      ? 'bg-primary/5 border-2 border-primary/30' 
+                      : 'border border-transparent'
                   }`}
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
                 >
-                  {sub.completed && (
-                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-                <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                  {sub.title}
-                </span>
-                {sub.focusTimeSeconds && sub.focusTimeSeconds > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {Math.floor(sub.focusTimeSeconds / 60)}m
-                  </span>
-                )}
-                {checklistCounts && (
-                  <span className="text-xs text-muted-foreground">
-                    Checklist {checklistCounts.completed}/{checklistCounts.total}
-                  </span>
-                )}
-                {!sub.completed && (
-                  <button
-                    onClick={() => onOpenSubGoalFocus(sub.id)}
-                    className="rounded-lg bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors flex items-center gap-1"
-                  >
-                    <Focus className="h-3.5 w-3.5" />
-                    Focus
-                  </button>
-                )}
-              </div>
-              );
-            })}
-          </div>
+                  {subGoals.map((sub, index) => {
+                    const checklistCounts = getChecklistCounts(sub.notes);
+                    return (
+                      <Draggable key={sub.id} draggableId={String(sub.id)} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                              snapshot.isDragging
+                                ? 'bg-primary/20 border-primary shadow-lg shadow-primary/20'
+                                : 'border-border bg-card hover:border-primary/30'
+                            }`}
+                          >
+                            <div
+                              {...provided.dragHandleProps}
+                              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors cursor-grab active:cursor-grabbing"
+                              title="Arrastra para reordenar"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </div>
+                            
+                            <button
+                              onClick={() => toggleSubGoal(sub.id)}
+                              className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                sub.completed
+                                  ? 'bg-primary border-primary'
+                                  : 'border-input hover:border-primary'
+                              }`}
+                            >
+                              {sub.completed && (
+                                <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                            
+                            <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                              {sub.title}
+                            </span>
+                            
+                            {sub.focusTimeSeconds && sub.focusTimeSeconds > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {Math.floor(sub.focusTimeSeconds / 60)}m
+                              </span>
+                            )}
+                            
+                            {checklistCounts && (
+                              <span className="text-xs text-muted-foreground">
+                                Checklist {checklistCounts.completed}/{checklistCounts.total}
+                              </span>
+                            )}
+                            
+                            {!sub.completed && (
+                              <button
+                                onClick={() => onOpenSubGoalFocus(sub.id)}
+                                className="rounded-lg bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors flex items-center gap-1"
+                              >
+                                <Focus className="h-3.5 w-3.5" />
+                                Focus
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
 
           {totalCount === 0 && (
             <div className="text-center py-8 text-muted-foreground">

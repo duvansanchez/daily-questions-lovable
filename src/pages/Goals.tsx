@@ -225,10 +225,10 @@ export default function Goals() {
     loadGoals();
   }, []);
 
-  // Escuchar Shift+N para crear nuevo objetivo
+  // Escuchar Alt+N para crear nuevo objetivo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key.toLowerCase() === 'n') {
+      if (e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         setEditingGoal(null);
         setModalOpen(true);

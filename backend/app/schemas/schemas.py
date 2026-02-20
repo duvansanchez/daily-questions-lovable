@@ -49,6 +49,7 @@ class GoalUpdate(BaseModel):
     fecha_fin: Optional[str] = None
     programado_para: Optional[str] = None
     completado: Optional[bool] = None
+    fecha_completado: Optional[str] = None
 
 
 class GoalFocusUpdate(BaseModel):

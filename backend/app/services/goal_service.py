@@ -82,17 +82,17 @@ class GoalService:
         if not db_goal:
             return None
         
-        # Actualizar si completado
-        if goal.completado is not None and goal.completado and not db_goal.completado:
-            status_data = {
-                'completado': True,
-                'fecha_completado': datetime.utcnow().isoformat()
-            }
-        else:
-            status_data = {}
-        
         update_data = goal.model_dump(exclude_unset=True)
-        update_data.update(status_data)
+        
+        # Si se actualiza "completado", manejar fecha_completado
+        if 'completado' in update_data:
+            if update_data['completado'] is True:
+                # Si está marcado como completado y no viene fecha_completado, usar la actual
+                if 'fecha_completado' not in update_data:
+                    update_data['fecha_completado'] = datetime.utcnow().isoformat()
+            else:
+                # Si está marcado como incompleto, limpiar fecha_completado
+                update_data['fecha_completado'] = None
         
         for field, value in update_data.items():
             setattr(db_goal, field, value)

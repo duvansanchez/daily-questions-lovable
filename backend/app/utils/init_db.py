@@ -10,9 +10,9 @@ except ImportError:
 
 def init_database():
     """Crear usuario dummy si no existe."""
-    if not HAS_PYODBC:
-        print("⚠️  pyodbc no disponible, omitiendo inicialización de BD")
-        return
+    # Deshabilitado temporalmente - causaba cuelgas
+    print("⏭️  Inicialización de BD deshabilitada (evitar cuelgas)")
+    return
     
     try:
         # Conectar directamente a SQL Server

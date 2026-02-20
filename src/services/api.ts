@@ -48,8 +48,14 @@ export const goalsAPI = {
       },
       body: JSON.stringify(updates),
     });
-    if (!response.ok) throw new Error('Error updating goal');
-    return response.json();
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`❌ Error updating goal ${goalId}:`, response.status, errorData);
+      throw new Error(`Error updating goal: ${response.status} ${errorData}`);
+    }
+    const data = await response.json();
+    console.log('✅ Goal updated successfully:', data);
+    return data;
   },
   
   deleteGoal: async (goalId: number | string) => {

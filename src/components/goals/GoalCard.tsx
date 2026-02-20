@@ -28,9 +28,10 @@ interface GoalCardProps {
   onToggle?: (id: string) => void;
   onFocusGoal?: (goalId: string) => void;
   onDelete?: (id: string) => void;
+  onToggleSubGoal?: (subGoalId: string) => void;
 }
 
-export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal, onDelete }: GoalCardProps) {
+export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal, onDelete, onToggleSubGoal }: GoalCardProps) {
   const [expanded, setExpanded] = useState(true);
   const completedSubs = goal.subGoals.filter(s => s.completed).length;
 
@@ -124,11 +125,14 @@ export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal, onDelete
                 <div className="mt-2 space-y-1.5 animate-fade-in">
                   {goal.subGoals.map(sub => (
                     <div key={sub.id} className="group/sub flex items-center gap-2 text-xs p-1.5 rounded-lg hover:bg-accent/50 transition-colors">
-                      <div className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center ${
-                        sub.completed ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-                      }`}>
+                      <button
+                        onClick={() => onToggleSubGoal?.(sub.id)}
+                        className={`h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer ${
+                          sub.completed ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30 hover:border-primary'
+                        }`}
+                      >
                         {sub.completed && <Check className="h-2.5 w-2.5" />}
-                      </div>
+                      </button>
                       <span className={`flex-1 ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                         {sub.title}
                       </span>

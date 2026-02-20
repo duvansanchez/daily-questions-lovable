@@ -233,18 +233,39 @@ export default function Goals() {
 
   const completedOf = (arr: typeof goals) => `${arr.filter(g => g.completed).length}/${arr.length}`;
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = (id: string) => {
     const goal = goals.find(g => g.id === id);
     if (!goal) return;
     
     const newCompleted = !goal.completed;
     const completedAt = newCompleted ? new Date().toISOString() : undefined;
     
+    setGoals(prev => prev.map(g => g.id === id ? { ...g, completed: newCompleted, completedAt } : g));
+    
+    void persistGoalUpdate(id, { completed: newCompleted, completedAt });
+  };
+
+  const persistGoalUpdate = async (goalId: string, updates: { completed: boolean; completedAt?: string }) => {
+    console.log('📤 persistGoalUpdate called with:', { goalId, updates });
+    
+    const payload: Record<string, unknown> = {};
+    if (typeof updates.completed === 'boolean') payload.completado = updates.completed;
+    if (updates.completedAt) payload.fecha_completado = updates.completedAt;
+    
+    console.log('📤 Payload to send:', payload);
+    
+    if (Object.keys(payload).length === 0) {
+      console.warn('⚠️ Empty payload, returning early');
+      return;
+    }
+
     try {
-      await goalsAPI.updateGoal(id, { completado: newCompleted });
-      setGoals(prev => prev.map(g => g.id === id ? { ...g, completed: newCompleted, completedAt } : g));
+      const result = await goalsAPI.updateGoal(goalId, payload);
+      console.log('✅ Goal update success:', { goalId, result });
     } catch (error) {
-      console.error('Error updating goal:', error);
+      console.error('❌ Goal update failed:', { goalId, error });
+      // Re-throw para que se propague si lo necesita
+      throw error;
     }
   };
 
@@ -564,6 +585,33 @@ export default function Goals() {
     void persistSubGoalUpdate(subGoalId, { completed: true });
   };
 
+  const handleToggleSubGoal = (subGoalId: string) => {
+    setGoals(prev => prev.map(g => ({
+      ...g,
+      subGoals: g.subGoals.map(s => {
+        if (s.id === subGoalId) {
+          const newCompleted = !s.completed;
+          return { 
+            ...s, 
+            completed: newCompleted,
+            completedAt: newCompleted ? new Date().toISOString() : undefined
+          };
+        }
+        return s;
+      }).sort((a, b) => {
+        // Ordenar: no completados primero, completados al final
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return 0;
+      })
+    })));
+
+    // Encontrar el subobjetivo para obtener su estado anterior
+    const subGoal = goals.flatMap(g => g.subGoals).find(s => s.id === subGoalId);
+    if (subGoal) {
+      void persistSubGoalUpdate(subGoalId, { completed: !subGoal.completed });
+    }
+  };
+
   const sorted = [...filtered].sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
     if (a.priority !== b.priority) {
@@ -644,6 +692,7 @@ export default function Goals() {
             onEdit={handleEdit}
             onFocusGoal={handleOpenGoalFocus}
             onDelete={handleDeleteGoal}
+            onToggleSubGoal={handleToggleSubGoal}
           />
         ))}
       </div>
@@ -678,9 +727,13 @@ export default function Goals() {
       <FocusModal
         open={focusModalOpen}
         onOpenChange={async (open) => {
-          setFocusModalOpen(open);
           if (!open && focusParentGoal) {
-            // Al cerrar el focus del subobjetivo, refrescar desde el backend para obtener el orden correcto
+            // Abrir el GoalFocusModal PRIMERO (instantáneamente)
+            setGoalFocusOpen(true);
+            // Luego cerrar el FocusModal
+            setFocusModalOpen(false);
+            
+            // Mientras tanto, refrescar datos en background
             try {
               const subgoalsData = await goalsAPI.getSubGoals(focusParentGoal.id);
               const mappedSubgoals = subgoalsData
@@ -706,7 +759,8 @@ export default function Goals() {
               const updatedParent = goals.find(g => g.id === focusParentGoal.id) || focusParentGoal;
               setFocusGoal(updatedParent);
             }
-            setGoalFocusOpen(true);
+          } else {
+            setFocusModalOpen(open);
           }
         }}
         subGoal={focusSubGoal}

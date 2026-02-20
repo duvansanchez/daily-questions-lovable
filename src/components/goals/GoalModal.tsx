@@ -84,11 +84,6 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
         scheduledDate: goal.scheduledFor || '',
         subGoals: [...goal.subGoals],
       });
-      setShowChecklist(goal.subGoals.length > 0);
-      // Auto-expand sections if they have data
-      setShowDatesSection(!!(goal.startDate || goal.endDate || goal.scheduledFor || goal.dayPart));
-      setShowDurationSection(!!(goal.estimatedHours || goal.estimatedMinutes || goal.reward));
-      setShowRelationsSection(!!(goal.parentGoalId || goal.isParent || goal.recurring));
     } else {
       setForm(defaultForm);
       setShowChecklist(false);

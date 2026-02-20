@@ -31,7 +31,7 @@ interface GoalCardProps {
 }
 
 export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal, onDelete }: GoalCardProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const completedSubs = goal.subGoals.filter(s => s.completed).length;
 
   return (

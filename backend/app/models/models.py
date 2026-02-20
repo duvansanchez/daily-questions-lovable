@@ -6,7 +6,7 @@ Mapean las tablas de SQL Server.
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime, 
-    ForeignKey, Text, Numeric, Float, Enum as SQLEnum
+    ForeignKey, Text, Numeric, Float, Enum as SQLEnum, Unicode
 )
 from sqlalchemy.orm import relationship
 from app.db.database import Base
@@ -56,6 +56,7 @@ class Goal(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, nullable=True)  # TODO: Será FK a User cuando autenticación esté implementada
     titulo = Column(String(255), nullable=False)
+    icono = Column(Unicode(10), nullable=True)  # Unicode para soportar emojis
     descripcion = Column(Text, nullable=True)
     prioridad = Column(String(20), nullable=True)
     categoria = Column(String(100), nullable=True)

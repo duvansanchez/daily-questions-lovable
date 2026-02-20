@@ -57,7 +57,8 @@ export default function GoalCard({ goal, onToggle, onEdit, onFocusGoal, onDelete
         <div className="flex-1 min-w-0">
           {/* Title & actions */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className={`font-heading font-semibold text-sm leading-tight ${goal.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+            <h3 className={`font-heading font-semibold text-sm leading-tight flex items-center gap-2 ${goal.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+              {goal.icon && <span className="text-base">{goal.icon}</span>}
               {goal.title}
             </h3>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

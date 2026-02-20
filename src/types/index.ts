@@ -15,6 +15,7 @@ export interface SubGoal {
 export interface Goal {
   id: string;
   title: string;
+  icon?: string;
   description?: string;
   category: GoalCategory;
   priority: GoalPriority;

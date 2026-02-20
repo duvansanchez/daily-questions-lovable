@@ -26,6 +26,7 @@ class GoalService:
         db_goal = Goal(
             user_id=1,  # Default user_id, asegúrate de que el usuario con ID 1 existe en la DB
             titulo=goal.titulo,
+            icono=goal.icono,
             descripcion=goal.descripcion,
             categoria=goal.categoria,
             prioridad=goal.prioridad,

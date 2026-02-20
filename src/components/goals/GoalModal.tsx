@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CalendarDays, CheckSquare, ChevronDown, Edit2, Info, ListChecks, Plus, PlusCircle, Trash2, X } from 'lucide-react';
+import { CalendarDays, CheckSquare, ChevronDown, Edit2, GripVertical, Info, ListChecks, Plus, PlusCircle, Trash2, X } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import type { Goal, GoalCategory, GoalPriority, DayPart, SubGoal } from '@/types';
 
 interface GoalFormData {
   title: string;
+  icon: string;
   description: string;
   priority: GoalPriority;
   category: GoalCategory;
@@ -24,6 +26,7 @@ interface GoalFormData {
 
 const defaultForm: GoalFormData = {
   title: '',
+  icon: '',
   description: '',
   priority: 'medium',
   category: 'daily',
@@ -68,6 +71,7 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
     if (goal) {
       setForm({
         title: goal.title,
+        icon: goal.icon || '',
         description: goal.description || '',
         priority: goal.priority,
         category: goal.category,
@@ -119,6 +123,28 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
     ));
   };
 
+  const handleDragEnd = (result: DropResult) => {
+    const { source, destination } = result;
+    
+    // Si se soltó fuera de una zona droppable
+    if (!destination) return;
+    
+    // Si la posición no cambió
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
+    }
+
+    const newSubGoals = Array.from(form.subGoals);
+    const [removed] = newSubGoals.splice(source.index, 1);
+    newSubGoals.splice(destination.index, 0, removed);
+    
+    // Actualizar el orden en el estado
+    update('subGoals', newSubGoals);
+  };
+
   const handleSubmit = () => {
     if (!form.title.trim()) return;
     onSave(form);
@@ -149,16 +175,27 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
         </div>
 
         <div className="px-6 py-5 space-y-1">
-          {/* Título */}
-          <FieldGroup label="Título" icon={<CheckSquare className="h-4 w-4" />}>
-            <input
-              value={form.title}
-              onChange={e => update('title', e.target.value)}
-              placeholder="¿Qué quieres lograr?"
-              className="modal-input text-base"
-              maxLength={200}
-            />
-          </FieldGroup>
+          {/* Título e Icono */}
+          <div className="grid grid-cols-[80px_1fr] gap-3">
+            <FieldGroup label="Icono">
+              <input
+                value={form.icon}
+                onChange={e => update('icon', e.target.value)}
+                placeholder="😀"
+                className="modal-input text-center text-2xl"
+                maxLength={4}
+              />
+            </FieldGroup>
+            <FieldGroup label="Título" icon={<CheckSquare className="h-4 w-4" />}>
+              <input
+                value={form.title}
+                onChange={e => update('title', e.target.value)}
+                placeholder="¿Qué quieres lograr?"
+                className="modal-input text-base"
+                maxLength={200}
+              />
+            </FieldGroup>
+          </div>
 
           {/* Descripción */}
           <FieldGroup label="Descripción" icon={<Info className="h-4 w-4" />}>
@@ -348,51 +385,85 @@ export default function GoalModal({ open, onOpenChange, goal, goals, onSave }: G
           >
             <div className="space-y-4">
               {form.subGoals.length > 0 && (
-                <div className="space-y-2">
-                  {form.subGoals.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-3 group/sub p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                      <button
-                        onClick={() => toggleSubGoal(sub.id)}
-                        className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
-                          sub.completed
-                            ? 'bg-primary border-primary shadow-lg shadow-primary/30'
-                            : 'border-input hover:border-primary hover:scale-110'
+                <DragDropContext onDragEnd={handleDragEnd}>
+                  <Droppable droppableId="subgoals-list">
+                    {(provided, snapshot) => (
+                      <div
+                        className={`space-y-2 rounded-xl p-2 transition-colors ${
+                          snapshot.isDraggingOver 
+                            ? 'bg-primary/5 border-2 border-primary/30' 
+                            : 'border border-transparent'
                         }`}
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
                       >
-                        {sub.completed && (
-                          <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-                      <input
-                        value={sub.title}
-                        onChange={e => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, title: e.target.value } : s))}
-                        className={`flex-1 bg-transparent text-sm outline-none ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                        maxLength={200}
-                      />
-                      {/* Priority dots */}
-                      <div className="flex items-center gap-1.5">
-                        {(['low', 'medium', 'high'] as GoalPriority[]).map(p => (
-                          <button
-                            key={p}
-                            onClick={() => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, priority: p } : s))}
-                            className={`h-3 w-3 rounded-full transition-all hover:scale-125 ${
-                              sub.priority === p ? priorityDot[p] + ' ring-2 ring-white/30' : 'bg-muted hover:bg-muted-foreground/40'
-                            }`}
-                            title={p === 'high' ? 'Alta' : p === 'medium' ? 'Media' : 'Baja'}
-                          />
+                        {form.subGoals.map((sub, index) => (
+                          <Draggable key={sub.id} draggableId={String(sub.id)} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className={`flex items-center gap-3 group/sub p-2 rounded-lg transition-all ${
+                                  snapshot.isDragging
+                                    ? 'bg-primary/20 border-2 border-primary shadow-lg shadow-primary/20'
+                                    : 'hover:bg-muted/50 border-2 border-transparent'
+                                }`}
+                              >
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors cursor-grab active:cursor-grabbing"
+                                  title="Arrastra para reordenar"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </div>
+                                <button
+                                  onClick={() => toggleSubGoal(sub.id)}
+                                  className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                    sub.completed
+                                      ? 'bg-primary border-primary shadow-lg shadow-primary/30'
+                                      : 'border-input hover:border-primary hover:scale-110'
+                                  }`}
+                                >
+                                  {sub.completed && (
+                                    <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <input
+                                  value={sub.title}
+                                  onChange={e => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, title: e.target.value } : s))}
+                                  className={`flex-1 bg-transparent text-sm outline-none ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                  maxLength={200}
+                                />
+                                {/* Priority dots */}
+                                <div className="flex items-center gap-1.5">
+                                  {(['low', 'medium', 'high'] as GoalPriority[]).map(p => (
+                                    <button
+                                      key={p}
+                                      onClick={() => update('subGoals', form.subGoals.map(s => s.id === sub.id ? { ...s, priority: p } : s))}
+                                      className={`h-3 w-3 rounded-full transition-all hover:scale-125 ${
+                                        sub.priority === p ? priorityDot[p] + ' ring-2 ring-white/30' : 'bg-muted hover:bg-muted-foreground/40'
+                                      }`}
+                                      title={p === 'high' ? 'Alta' : p === 'medium' ? 'Media' : 'Baja'}
+                                    />
+                                  ))}
+                                </div>
+                                <button
+                                  onClick={() => removeSubGoal(sub.id)}
+                                  className="p-1 rounded-lg text-destructive opacity-0 group-hover/sub:opacity-100 hover:bg-destructive/10 transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
                         ))}
+                        {provided.placeholder}
                       </div>
-                      <button
-                        onClick={() => removeSubGoal(sub.id)}
-                        className="p-1 rounded-lg text-destructive opacity-0 group-hover/sub:opacity-100 hover:bg-destructive/10 transition-all"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
               )}
 
               {/* Add new subgoal */}

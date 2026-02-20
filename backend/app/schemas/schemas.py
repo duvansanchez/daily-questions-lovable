@@ -14,6 +14,7 @@ class GoalBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     
     titulo: str = Field(..., min_length=1, max_length=255, alias="title")
+    icono: Optional[str] = None
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     prioridad: Optional[str] = None
@@ -36,6 +37,7 @@ class GoalCreate(GoalBase):
 class GoalUpdate(BaseModel):
     """Actualizar objetivo."""
     titulo: Optional[str] = None
+    icono: Optional[str] = None
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     prioridad: Optional[str] = None
@@ -63,6 +65,7 @@ class GoalResponse(BaseModel):
     id: int
     user_id: int
     titulo: str
+    icono: Optional[str] = None
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     prioridad: Optional[str] = None

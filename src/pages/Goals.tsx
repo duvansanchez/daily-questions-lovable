@@ -107,8 +107,8 @@ const shouldShowGoal = (item: any, goalCategory: GoalCategory): boolean => {
 // Mapear datos del backend al formato frontend
 const mapBackendGoal = (item: any): Goal => ({
   id: item.id.toString(),
-  user_id: item.user_id,
   title: item.titulo,
+  icon: item.icono || undefined,
   description: item.descripcion || undefined,
   category: mapCategory(item.categoria),
   priority: mapPriority(item.prioridad),
@@ -312,6 +312,7 @@ export default function Goals() {
         title: data.title,
       };
       
+      if (data.icon) updatePayload.icono = data.icon;
       if (data.description) updatePayload.descripcion = data.description;
       if (data.category) updatePayload.categoria = categoryMap[data.category] || data.category;
       if (data.priority) updatePayload.prioridad = data.priority;
@@ -330,6 +331,7 @@ export default function Goals() {
         setGoals(prev => prev.map(g => g.id === editingGoal.id ? {
           ...g,
           title: data.title,
+          icon: data.icon || undefined,
           description: data.description || undefined,
           priority: data.priority,
           category: data.category,
@@ -409,6 +411,7 @@ export default function Goals() {
         title: data.title,
       };
       
+      if (data.icon) createPayload.icono = data.icon;
       if (data.description) createPayload.descripcion = data.description;
       if (data.category) createPayload.categoria = categoryMap[data.category] || data.category;
       if (data.priority) createPayload.prioridad = data.priority;
@@ -456,6 +459,7 @@ export default function Goals() {
         const newGoal: Goal = {
           id: createdGoal.id,
           title: data.title,
+          icon: data.icon || undefined,
           description: data.description || undefined,
           category: data.category,
           priority: data.priority,

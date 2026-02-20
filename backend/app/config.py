@@ -32,14 +32,16 @@ class Settings(BaseSettings):
             return (
                 f"mssql+pyodbc://{self.DB_USER}:{self.DB_PASSWORD}@"
                 f"{self.DB_SERVER}/{self.DB_NAME}?"
-                f"driver={self.DB_DRIVER.replace(' ', '+')}"
+                f"driver={self.DB_DRIVER.replace(' ', '+')}&"
+                f"charset=utf8"
             )
         else:
             # Conexión con Windows Authentication
             return (
                 f"mssql+pyodbc:///?odq_user=&odq_passwd=&"
                 f"driver={self.DB_DRIVER.replace(' ', '+')}&"
-                f"server={self.DB_SERVER}&database={self.DB_NAME}"
+                f"server={self.DB_SERVER}&database={self.DB_NAME}&"
+                f"charset=utf8"
             )
 
 

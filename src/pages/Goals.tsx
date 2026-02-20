@@ -182,15 +182,21 @@ export default function Goals() {
           filteredGoals.map(async (goal) => {
             try {
               const subgoalsData = await goalsAPI.getSubGoals(goal.id);
-              const mappedSubgoals = subgoalsData.map((sub: any): SubGoal => ({
-                id: sub.id.toString(),
-                title: sub.titulo,
-                completed: sub.completado || false,
-                notes: sub.notas || undefined,
-                completedAt: sub.fecha_completado || undefined,
-                priority: undefined, // Los subobjetivos no tienen prioridad en  la tabla subobjetivos
-                focusTimeSeconds: sub.tiempo_focus || 0,
-              }));
+              const mappedSubgoals = subgoalsData
+                .map((sub: any): SubGoal => ({
+                  id: sub.id.toString(),
+                  title: sub.titulo,
+                  completed: sub.completado || false,
+                  notes: sub.notas || undefined,
+                  completedAt: sub.fecha_completado || undefined,
+                  priority: undefined, // Los subobjetivos no tienen prioridad en  la tabla subobjetivos
+                  focusTimeSeconds: sub.tiempo_focus || 0,
+                }))
+                .sort((a, b) => {
+                  const orderA = subgoalsData.find((s: any) => s.id.toString() === a.id)?.orden || 0;
+                  const orderB = subgoalsData.find((s: any) => s.id.toString() === b.id)?.orden || 0;
+                  return orderA - orderB;
+                });
               return { ...goal, subGoals: mappedSubgoals };
             } catch (error) {
               console.warn(`⚠️ No se pudieron cargar subobjetivos para objetivo ${goal.id}:`, error);
@@ -455,12 +461,13 @@ export default function Goals() {
     setFocusModalOpen(true);
   };
 
-  const persistSubGoalUpdate = async (subGoalId: string, updates: Partial<SubGoal>) => {
+  const persistSubGoalUpdate = async (subGoalId: string, updates: Partial<SubGoal>, orden?: number) => {
     const payload: Record<string, unknown> = {};
     if (typeof updates.title === 'string') payload.titulo = updates.title;
     if (typeof updates.completed === 'boolean') payload.completado = updates.completed;
     if (typeof updates.focusTimeSeconds === 'number') payload.tiempo_focus = updates.focusTimeSeconds;
     if (typeof updates.notes === 'string') payload.notas = updates.notes;
+    if (typeof orden === 'number') payload.orden = orden;
     if (Object.keys(payload).length === 0) return;
 
     try {
@@ -492,12 +499,12 @@ export default function Goals() {
       : prev
     );
 
-    updates.subGoals.forEach(sub => {
+    updates.subGoals.forEach((sub, index) => {
       void persistSubGoalUpdate(sub.id, {
         completed: sub.completed,
         focusTimeSeconds: sub.focusTimeSeconds,
         notes: sub.notes,
-      });
+      }, index); // Pasar el índice como el nuevo orden
     });
   };
 

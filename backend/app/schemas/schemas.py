@@ -107,12 +107,24 @@ class PhraseSubcategoryBase(BaseModel):
     active: Optional[bool] = True
 
 
+class PhraseSubcategoryCreate(PhraseSubcategoryBase):
+    """Crear subcategoría de frase."""
+    category_id: str
+
+
+class PhraseSubcategoryUpdate(BaseModel):
+    """Actualizar subcategoría de frase."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    active: Optional[bool] = None
+
+
 class PhraseSubcategoryResponse(PhraseSubcategoryBase):
     """Respuesta de subcategoría de frase."""
     id: str
     category_id: Optional[str] = None
     created_at: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 

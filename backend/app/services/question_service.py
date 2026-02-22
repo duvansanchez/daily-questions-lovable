@@ -3,7 +3,7 @@ Servicios para preguntas y sesiones diarias.
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from app.models.models import Question, QuestionResponse, QuestionOption, DailyQuestionsSession
 from app.schemas.schemas import QuestionCreate, QuestionUpdate
 from datetime import datetime
@@ -48,7 +48,17 @@ class QuestionService:
         if active is not None:
             query = query.filter(Question.active == active)
         if frequency:
-            query = query.filter(Question.frecuencia == frequency)
+            daily_variants = ('diaria', 'diario', 'daily')
+            if frequency.lower() in daily_variants:
+                query = query.filter(
+                    or_(
+                        Question.frecuencia.in_(daily_variants),
+                        Question.frecuencia == None,
+                        Question.frecuencia == '',
+                    )
+                )
+            else:
+                query = query.filter(Question.frecuencia == frequency)
         
         total = query.count()
         questions = query.order_by(Question.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
@@ -61,32 +71,40 @@ class QuestionService:
     
     @staticmethod
     def update_question(db: Session, question_id: str, question: QuestionUpdate) -> Optional[Question]:
-        """Actualizar pregunta."""
-        db_question = db.query(Question).filter(Question.id == question_id).first()
-        if not db_question:
+        """Actualizar pregunta usando SQL puro para evitar problemas de ORM con SQL Server."""
+        exists = db.execute(
+            text("SELECT id FROM question WHERE id = :id"), {"id": question_id}
+        ).fetchone()
+        if not exists:
             return None
-        
+
+        field_map = {
+            'text': 'text',
+            'descripcion': 'descripcion',
+            'type': 'type',
+            'options': 'options',
+            'categoria': 'categoria',
+            'is_required': 'is_required',
+            'active': 'active',
+        }
+
         update_data = question.model_dump(exclude_unset=True)
-        
+        if not update_data:
+            return db.query(Question).filter(Question.id == question_id).first()
+
+        set_parts = []
+        params = {"question_id": question_id}
         for field, value in update_data.items():
-            if field == "text":
-                setattr(db_question, "text", value)
-            elif field == "descripcion":
-                setattr(db_question, "descripcion", value)
-            elif field == "type":
-                setattr(db_question, "type", value)
-            elif field == "options":
-                setattr(db_question, "options", value)
-            elif field == "categoria":
-                setattr(db_question, "categoria", value)
-            elif field == "is_required":
-                setattr(db_question, "is_required", value)
-            elif field == "active":
-                setattr(db_question, "active", value)
-        
+            col = field_map.get(field, field)
+            param_key = f"p_{col}"
+            set_parts.append(f"{col} = :{param_key}")
+            params[param_key] = int(value) if isinstance(value, bool) else value
+
+        sql = f"UPDATE question SET {', '.join(set_parts)} WHERE id = :question_id"
+        db.execute(text(sql), params)
         db.commit()
-        db.refresh(db_question)
-        return db_question
+
+        return db.query(Question).filter(Question.id == question_id).first()
     
     @staticmethod
     def delete_question(db: Session, question_id: str) -> bool:

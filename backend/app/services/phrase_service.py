@@ -7,7 +7,8 @@ from sqlalchemy import text
 from app.models.models import Phrase, PhraseCategory, PhraseSubcategory
 from app.schemas.schemas import (
     PhraseCategoryCreate, PhraseCategoryUpdate,
-    PhraseCreate, PhraseUpdate
+    PhraseCreate, PhraseUpdate,
+    PhraseSubcategoryCreate, PhraseSubcategoryUpdate,
 )
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
@@ -80,28 +81,132 @@ class PhraseCategoryService:
         return db.query(PhraseCategory).filter(PhraseCategory.id == category_id).first()
     
     @staticmethod
+    def get_all_categories_admin(db: Session) -> List[Dict[str, Any]]:
+        """Obtener todas las categorías (activas e inactivas) con subcategorías y conteo de frases."""
+        categories = db.query(PhraseCategory).order_by(PhraseCategory.nombre).all()
+        result = []
+        for category in categories:
+            subcategories = db.query(PhraseSubcategory).filter(
+                PhraseSubcategory.categoria_id == category.id
+            ).order_by(PhraseSubcategory.nombre).all()
+            phrase_count = db.query(Phrase).filter(Phrase.categoria_id == category.id).count()
+            cat_dict = {
+                "id": str(category.id),
+                "name": category.nombre,
+                "description": category.descripcion,
+                "active": category.activa,
+                "created_at": category.fecha_creacion.isoformat() if category.fecha_creacion else None,
+                "phrase_count": phrase_count,
+                "subcategories": [
+                    {
+                        "id": str(sub.id),
+                        "name": sub.nombre,
+                        "description": sub.descripcion,
+                        "active": sub.activa,
+                        "category_id": str(sub.categoria_id),
+                        "created_at": sub.fecha_creacion.isoformat() if sub.fecha_creacion else None,
+                        "phrase_count": db.query(Phrase).filter(Phrase.subcategoria_id == sub.id).count(),
+                    }
+                    for sub in subcategories
+                ],
+            }
+            result.append(cat_dict)
+        return result
+
+    @staticmethod
     def update_category(db: Session, category_id: str, category: PhraseCategoryUpdate) -> Optional[PhraseCategory]:
-        """Actualizar categoría."""
-        db_category = db.query(PhraseCategory).filter(PhraseCategory.id == category_id).first()
-        if not db_category:
+        """Actualizar categoría usando SQL puro para evitar problemas de ORM con SQL Server."""
+        exists = db.execute(
+            text("SELECT id FROM categorias WHERE id = :id"), {"id": category_id}
+        ).fetchone()
+        if not exists:
             return None
-        
+
+        field_map = {'name': 'nombre', 'description': 'descripcion', 'active': 'activa'}
         update_data = category.model_dump(exclude_unset=True)
+        if not update_data:
+            return db.query(PhraseCategory).filter(PhraseCategory.id == category_id).first()
+
+        set_parts = []
+        params = {"cat_id": category_id}
         for field, value in update_data.items():
-            setattr(db_category, field, value)
-        
+            col = field_map.get(field, field)
+            param_key = f"p_{col}"
+            set_parts.append(f"{col} = :{param_key}")
+            params[param_key] = int(value) if isinstance(value, bool) else value
+
+        sql = f"UPDATE categorias SET {', '.join(set_parts)} WHERE id = :cat_id"
+        db.execute(text(sql), params)
         db.commit()
-        db.refresh(db_category)
-        return db_category
-    
+        return db.query(PhraseCategory).filter(PhraseCategory.id == category_id).first()
+
     @staticmethod
     def delete_category(db: Session, category_id: str) -> bool:
         """Eliminar categoría y subcategorías."""
-        db_category = db.query(PhraseCategory).filter(PhraseCategory.id == category_id).first()
-        if not db_category:
+        exists = db.execute(
+            text("SELECT id FROM categorias WHERE id = :id"), {"id": category_id}
+        ).fetchone()
+        if not exists:
             return False
-        
-        db.delete(db_category)
+        db.execute(text("DELETE FROM subcategorias WHERE categoria_id = :id"), {"id": category_id})
+        db.execute(text("DELETE FROM categorias WHERE id = :id"), {"id": category_id})
+        db.commit()
+        return True
+
+
+class PhraseSubcategoryService:
+    """Servicio para subcategorías de frases."""
+
+    @staticmethod
+    def create_subcategory(db: Session, data: PhraseSubcategoryCreate) -> PhraseSubcategory:
+        """Crear subcategoría."""
+        db_sub = PhraseSubcategory(
+            categoria_id=int(data.category_id),
+            nombre=data.name,
+            descripcion=data.description,
+            activa=data.active if data.active is not None else True,
+        )
+        db.add(db_sub)
+        db.commit()
+        db.refresh(db_sub)
+        return db_sub
+
+    @staticmethod
+    def update_subcategory(db: Session, subcategory_id: str, data: PhraseSubcategoryUpdate) -> Optional[PhraseSubcategory]:
+        """Actualizar subcategoría usando SQL puro."""
+        exists = db.execute(
+            text("SELECT id FROM subcategorias WHERE id = :id"), {"id": subcategory_id}
+        ).fetchone()
+        if not exists:
+            return None
+
+        field_map = {'name': 'nombre', 'description': 'descripcion', 'active': 'activa'}
+        update_data = data.model_dump(exclude_unset=True)
+        if not update_data:
+            return db.query(PhraseSubcategory).filter(PhraseSubcategory.id == subcategory_id).first()
+
+        set_parts = []
+        params = {"sub_id": subcategory_id}
+        for field, value in update_data.items():
+            col = field_map.get(field, field)
+            param_key = f"p_{col}"
+            set_parts.append(f"{col} = :{param_key}")
+            params[param_key] = int(value) if isinstance(value, bool) else value
+
+        sql = f"UPDATE subcategorias SET {', '.join(set_parts)} WHERE id = :sub_id"
+        db.execute(text(sql), params)
+        db.commit()
+        return db.query(PhraseSubcategory).filter(PhraseSubcategory.id == subcategory_id).first()
+
+    @staticmethod
+    def delete_subcategory(db: Session, subcategory_id: str) -> bool:
+        """Eliminar subcategoría."""
+        exists = db.execute(
+            text("SELECT id FROM subcategorias WHERE id = :id"), {"id": subcategory_id}
+        ).fetchone()
+        if not exists:
+            return False
+        db.execute(text("DELETE FROM subcategorias WHERE id = :id"), {"id": subcategory_id})
         db.commit()
         return True
 

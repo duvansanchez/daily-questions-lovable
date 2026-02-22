@@ -139,7 +139,7 @@ class Question(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     text = Column(String(500), nullable=False)
     type = Column(String(50), nullable=False)
-    options = Column(String(500), nullable=True)
+    options = Column(Text, nullable=True)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, nullable=True)
     assigned_user_id = Column(Integer, nullable=True)

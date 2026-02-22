@@ -158,6 +158,68 @@ export const phrasesAPI = {
     if (!response.ok) throw new Error('Error deleting phrase');
     return response.json();
   },
+
+  getCategoriesAdmin: async () => {
+    const response = await fetch(`${API_BASE_URL}/phrases/categories-admin`);
+    if (!response.ok) throw new Error('Error fetching categories admin');
+    return response.json();
+  },
+
+  createCategory: async (payload: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Error creating category');
+    return response.json();
+  },
+
+  updateCategory: async (categoryId: string, payload: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/categories/${categoryId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Error updating category');
+    return response.json();
+  },
+
+  deleteCategory: async (categoryId: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/categories/${categoryId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Error deleting category');
+    return response.json();
+  },
+
+  createSubcategory: async (payload: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/subcategories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Error creating subcategory');
+    return response.json();
+  },
+
+  updateSubcategory: async (subcategoryId: string, payload: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/subcategories/${subcategoryId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Error updating subcategory');
+    return response.json();
+  },
+
+  deleteSubcategory: async (subcategoryId: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/subcategories/${subcategoryId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Error deleting subcategory');
+    return response.json();
+  },
 };
 
 /**

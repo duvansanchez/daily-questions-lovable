@@ -8,10 +8,11 @@ from app.db.database import get_db
 from app.schemas.schemas import (
     PhraseCategoryCreate, PhraseCategoryUpdate, PhraseCategoryResponse,
     PhraseCreate, PhraseUpdate, PhraseResponse,
-    PhrasesPaginatedResponse
+    PhrasesPaginatedResponse,
+    PhraseSubcategoryCreate, PhraseSubcategoryUpdate, PhraseSubcategoryResponse,
 )
 from app.services.phrase_service import (
-    PhraseCategoryService, PhraseService
+    PhraseCategoryService, PhraseSubcategoryService, PhraseService
 )
 from typing import List
 import math
@@ -41,8 +42,53 @@ def list_categories(
 
 @router.get("/categories-tree", response_model=List[dict])
 def get_categories_tree(db: Session = Depends(get_db)):
-    """Obtener todas las categorías con subcategorías anidadas."""
+    """Obtener categorías activas con subcategorías anidadas (para selector de frases)."""
     return PhraseCategoryService.get_categories_with_subcategories(db)
+
+
+@router.get("/categories-admin", response_model=List[dict])
+def get_categories_admin(db: Session = Depends(get_db)):
+    """Obtener todas las categorías (activas e inactivas) con subcategorías y conteos para admin."""
+    return PhraseCategoryService.get_all_categories_admin(db)
+
+
+@router.post("/subcategories", response_model=dict)
+def create_subcategory(data: PhraseSubcategoryCreate, db: Session = Depends(get_db)):
+    """Crear subcategoría de frase."""
+    sub = PhraseSubcategoryService.create_subcategory(db, data)
+    return {
+        "id": str(sub.id),
+        "name": sub.nombre,
+        "description": sub.descripcion,
+        "active": sub.activa,
+        "category_id": str(sub.categoria_id),
+        "created_at": sub.fecha_creacion.isoformat() if sub.fecha_creacion else None,
+        "phrase_count": 0,
+    }
+
+
+@router.patch("/subcategories/{subcategory_id}", response_model=dict)
+def update_subcategory(subcategory_id: str, data: PhraseSubcategoryUpdate, db: Session = Depends(get_db)):
+    """Actualizar subcategoría de frase."""
+    sub = PhraseSubcategoryService.update_subcategory(db, subcategory_id, data)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subcategory not found")
+    return {
+        "id": str(sub.id),
+        "name": sub.nombre,
+        "description": sub.descripcion,
+        "active": sub.activa,
+        "category_id": str(sub.categoria_id),
+        "created_at": sub.fecha_creacion.isoformat() if sub.fecha_creacion else None,
+    }
+
+
+@router.delete("/subcategories/{subcategory_id}")
+def delete_subcategory(subcategory_id: str, db: Session = Depends(get_db)):
+    """Eliminar subcategoría de frase."""
+    if not PhraseSubcategoryService.delete_subcategory(db, subcategory_id):
+        raise HTTPException(status_code=404, detail="Subcategory not found")
+    return {"message": "Subcategory deleted"}
 
 
 @router.post("/categories", response_model=PhraseCategoryResponse)

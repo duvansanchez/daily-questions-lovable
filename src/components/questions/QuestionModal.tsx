@@ -74,6 +74,12 @@ export default function QuestionModal({ open, onOpenChange, question, onSave }: 
     update('options', form.options.filter(o => o.id !== id));
   };
 
+  const updateOptionLabel = (id: string, label: string) => {
+    update('options', form.options.map(o =>
+      o.id === id ? { ...o, label, value: label.toLowerCase().replace(/\s+/g, '-') } : o
+    ));
+  };
+
   const handleSubmit = () => {
     if (!form.title.trim()) return;
     if (needsOptions && form.options.length === 0) {
@@ -167,7 +173,12 @@ export default function QuestionModal({ open, onOpenChange, question, onSave }: 
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
                         {index + 1}
                       </span>
-                      <span className="flex-1 text-sm text-foreground">{option.label}</span>
+                      <input
+                        value={option.label}
+                        onChange={e => updateOptionLabel(option.id, e.target.value)}
+                        className="flex-1 text-sm text-foreground bg-transparent border-none outline-none focus:ring-0 px-1"
+                        maxLength={100}
+                      />
                       <button
                         onClick={() => removeOption(option.id)}
                         className="p-1 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Circle, Grid3X3, List, Plus, Target, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Circle, Grid3X3, History, List, Plus, Target, TrendingUp } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import GoalCard from '@/components/goals/GoalCard';
 import GoalModal from '@/components/goals/GoalModal';
@@ -8,13 +8,14 @@ import FocusModal from '@/components/goals/FocusModal';
 import { goalsAPI } from '@/services/api';
 import type { Goal, GoalCategory, SubGoal } from '@/types';
 
-const tabs: { key: GoalCategory | 'all'; label: string }[] = [
+const tabs: { key: GoalCategory | 'all' | 'historicos'; label: string }[] = [
   { key: 'all', label: 'Todos' },
   { key: 'daily', label: 'Diarios' },
   { key: 'weekly', label: 'Semanales' },
   { key: 'monthly', label: 'Mensuales' },
   { key: 'yearly', label: 'Anuales' },
   { key: 'general', label: 'Generales' },
+  { key: 'historicos', label: 'Históricos' },
 ];
 
 // Mapear categoría de español a inglés
@@ -124,7 +125,7 @@ const mapBackendGoal = (item: any): Goal => ({
 });
 
 export default function Goals() {
-  const [activeTab, setActiveTab] = useState<GoalCategory | 'all'>('daily');
+  const [activeTab, setActiveTab] = useState<GoalCategory | 'all' | 'historicos'>('daily');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +136,7 @@ export default function Goals() {
   const [focusModalOpen, setFocusModalOpen] = useState(false);
   const [focusSubGoal, setFocusSubGoal] = useState<SubGoal | null>(null);
   const [focusParentGoal, setFocusParentGoal] = useState<Goal | null>(null);
+  const [allGoalsMapped, setAllGoalsMapped] = useState<Goal[]>([]);
 
   // Cargar objetivos del backend
   useEffect(() => {
@@ -165,6 +167,7 @@ export default function Goals() {
         
         // Mapear PRIMERO (para tener la categoría en inglés)
         const allMapped = allItems.map(mapBackendGoal);
+        setAllGoalsMapped(allMapped);
         
         console.log('📋 Categorías SIN filtro de fecha:', allMapped.reduce((acc, g) => {
           acc[g.category] = (acc[g.category] || 0) + 1;
@@ -253,8 +256,9 @@ export default function Goals() {
     
     const newCompleted = !goal.completed;
     const completedAt = newCompleted ? new Date().toISOString() : undefined;
-    
+
     setGoals(prev => prev.map(g => g.id === id ? { ...g, completed: newCompleted, completedAt } : g));
+    setAllGoalsMapped(prev => prev.map(g => g.id === id ? { ...g, completed: newCompleted, completedAt } : g));
     
     void persistGoalUpdate(id, { completed: newCompleted, completedAt });
   };
@@ -522,6 +526,7 @@ export default function Goals() {
     try {
       await goalsAPI.deleteGoal(goalId);
       setGoals(prev => prev.filter(g => g.id !== goalId));
+      setAllGoalsMapped(prev => prev.filter(g => g.id !== goalId));
     } catch (error) {
       console.error('Error deleting goal:', error);
     }
@@ -675,6 +680,26 @@ export default function Goals() {
     return 0;
   });
 
+  const currentGoalIds = new Set(goals.map(g => g.id));
+  const historicFiltered = allGoalsMapped
+    .filter(g => !currentGoalIds.has(g.id) && g.completed)
+    .sort((a, b) =>
+      new Date(b.completedAt || b.createdAt || 0).getTime() -
+      new Date(a.completedAt || a.createdAt || 0).getTime()
+    );
+
+  const groupedHistoric = historicFiltered.reduce(
+    (groups: Record<string, { label: string; goals: Goal[] }>, goal) => {
+      const date = new Date(goal.completedAt || goal.createdAt || Date.now());
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      if (!groups[key]) groups[key] = { label, goals: [] };
+      groups[key].goals.push(goal);
+      return groups;
+    },
+    {}
+  );
+
   return (
     <div>
       {/* Header */}
@@ -733,30 +758,71 @@ export default function Goals() {
         </div>
       </div>
 
-      {/* Goals Grid */}
-      <div className={viewMode === 'grid'
-        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
-        : 'space-y-3'
-      }>
-        {sorted.map(goal => (
-          <GoalCard 
-            key={goal.id} 
-            goal={goal} 
-            onToggle={handleToggle} 
-            onEdit={handleEdit}
-            onFocusGoal={handleOpenGoalFocus}
-            onDelete={handleDeleteGoal}
-            onToggleSubGoal={handleToggleSubGoal}
-          />
-        ))}
-      </div>
+      {activeTab !== 'historicos' ? (
+        <>
+          {/* Goals Grid */}
+          <div className={viewMode === 'grid'
+            ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+            : 'space-y-3'
+          }>
+            {sorted.map(goal => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                onToggle={handleToggle}
+                onEdit={handleEdit}
+                onFocusGoal={handleOpenGoalFocus}
+                onDelete={handleDeleteGoal}
+                onToggleSubGoal={handleToggleSubGoal}
+              />
+            ))}
+          </div>
 
-      {sorted.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Target className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <p className="text-muted-foreground font-medium">No hay objetivos en esta categoría</p>
-          <p className="text-xs text-muted-foreground mt-1">Crea tu primer objetivo para empezar</p>
-        </div>
+          {sorted.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Target className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground font-medium">No hay objetivos en esta categoría</p>
+              <p className="text-xs text-muted-foreground mt-1">Crea tu primer objetivo para empezar</p>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Vista Históricos */
+        historicFiltered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <History className="h-12 w-12 text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground font-medium">No hay objetivos históricos aún</p>
+            <p className="text-xs text-muted-foreground mt-1">Aquí aparecerán los objetivos completados de períodos anteriores</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(groupedHistoric)
+              .sort(([a], [b]) => b.localeCompare(a))
+              .map(([key, { label, goals: groupGoals }]) => (
+                <div key={key}>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 capitalize">
+                    {label}
+                  </h3>
+                  <div className={viewMode === 'grid'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+                    : 'space-y-3'
+                  }>
+                    {groupGoals.map(goal => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        onToggle={handleToggle}
+                        onEdit={handleEdit}
+                        onFocusGoal={handleOpenGoalFocus}
+                        onDelete={handleDeleteGoal}
+                        onToggleSubGoal={handleToggleSubGoal}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )
       )}
 
       {/* Modal */}

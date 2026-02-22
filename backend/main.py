@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 print("🔍 [1] Iniciando importaciones...", flush=True)
 
 try:
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
     print("✅ FastAPI importado", flush=True)
-    
+
     from fastapi.middleware.cors import CORSMiddleware
     print("✅ CORS middleware importado", flush=True)
     
@@ -46,11 +47,21 @@ print("🔍 [3] Configurando CORS...", flush=True)
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Handler global: garantiza headers CORS incluso en respuestas de error 500
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 print("🔍 [4] Incluyendo routers...", flush=True)
 

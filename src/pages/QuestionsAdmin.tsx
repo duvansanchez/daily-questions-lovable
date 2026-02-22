@@ -11,6 +11,7 @@ export default function QuestionsAdmin() {
   const [filterCategory, setFilterCategory] = useState<QuestionCategory | 'all'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const mapBackendQuestion = (item: any): Question => {
     let parsedOptions = [] as Question['options'];
@@ -41,13 +42,13 @@ export default function QuestionsAdmin() {
     const loadQuestions = async () => {
       try {
         setLoading(true);
-        const firstPage = await questionsAPI.getQuestions(1, 100, undefined, undefined, 'diaria');
+        const firstPage = await questionsAPI.getQuestions(1, 100);
         let allItems = [...firstPage.items];
 
         if (firstPage.pages > 1) {
           const pagePromises = [];
           for (let page = 2; page <= firstPage.pages; page++) {
-            pagePromises.push(questionsAPI.getQuestions(page, 100, undefined, undefined, 'diaria'));
+            pagePromises.push(questionsAPI.getQuestions(page, 100));
           }
           const restPages = await Promise.all(pagePromises);
           allItems = [...allItems, ...restPages.flatMap(p => p.items)];
@@ -69,7 +70,8 @@ export default function QuestionsAdmin() {
       const matchesSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            q.description?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = filterCategory === 'all' || q.category === filterCategory;
-      return matchesSearch && matchesCategory;
+      const matchesActive = showInactive || q.active;
+      return matchesSearch && matchesCategory && matchesActive;
     })
     .sort((a, b) => {
       if (a.active !== b.active) return a.active ? -1 : 1;
@@ -208,6 +210,18 @@ export default function QuestionsAdmin() {
                 <option key={cat.value} value={cat.value}>{cat.label}</option>
               ))}
             </select>
+
+            {/* Toggle inactivas */}
+            <button
+              onClick={() => setShowInactive(v => !v)}
+              className={`whitespace-nowrap px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                showInactive
+                  ? 'bg-muted text-foreground border-border'
+                  : 'bg-background text-muted-foreground border-input hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              {showInactive ? 'Ocultar inactivas' : `Mostrar inactivas (${questions.filter(q => !q.active).length})`}
+            </button>
           </div>
         </div>
 

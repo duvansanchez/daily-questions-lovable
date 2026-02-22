@@ -3,6 +3,7 @@ Servicios para preguntas y sesiones diarias.
 """
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.models import Question, QuestionResponse, QuestionOption, DailyQuestionsSession
 from app.schemas.schemas import QuestionCreate, QuestionUpdate
 from datetime import datetime
@@ -89,12 +90,18 @@ class QuestionService:
     
     @staticmethod
     def delete_question(db: Session, question_id: str) -> bool:
-        """Eliminar pregunta y sus opciones."""
-        db_question = db.query(Question).filter(Question.id == question_id).first()
-        if not db_question:
+        """Eliminar pregunta junto con sus opciones y respuestas relacionadas."""
+        # Verificar que existe
+        exists = db.execute(
+            text("SELECT id FROM question WHERE id = :qid"), {"qid": question_id}
+        ).fetchone()
+        if not exists:
             return False
-        
-        db.delete(db_question)
+
+        # Usar SQL puro para evitar que el ORM cargue relaciones con columnas incorrectas
+        db.execute(text("DELETE FROM question_option WHERE pregunta_id = :qid"), {"qid": question_id})
+        db.execute(text("DELETE FROM response WHERE question_id = :qid"), {"qid": question_id})
+        db.execute(text("DELETE FROM question WHERE id = :qid"), {"qid": question_id})
         db.commit()
         return True
 

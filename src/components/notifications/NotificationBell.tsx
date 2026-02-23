@@ -1,20 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, X, Quote, Target, Star, CalendarDays } from 'lucide-react';
+import { Bell, X, Quote, Target, CalendarDays, Sunrise, Sunset, CheckCircle2 } from 'lucide-react';
 import { phrasesAPI, goalsAPI } from '@/services/api';
-import { isBellUnread, markBellRead } from './notificationState';
+import { isBellUnread, markBellRead, getReadState, getCurrentInterval } from './notificationState';
+
+type GoalItem = { titulo: string; categoria: string; completado: boolean };
+
+function normalizeCategory(cat: string | null | undefined): string {
+  const c = (cat ?? '').toLowerCase().trim();
+  if (c === 'semanal' || c === 'semanales' || c === 'weekly') return 'weekly';
+  if (c === 'mensual' || c === 'mensuales' || c === 'monthly') return 'monthly';
+  return c;
+}
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(false);
   const [phrase, setPhrase] = useState<{ texto: string; autor?: string } | null>(null);
-  const [weeklyPending, setWeeklyPending] = useState(0);
-  const [monthlyPending, setMonthlyPending] = useState(0);
-  const [yearlyPending, setYearlyPending] = useState(0);
+  const [weeklyGoals, setWeeklyGoals] = useState<GoalItem[]>([]);
+  const [monthlyGoals, setMonthlyGoals] = useState<GoalItem[]>([]);
+  const [readState, setReadState] = useState({ morningRead: false, afternoonRead: false });
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUnread(isBellUnread());
+    setReadState(getReadState());
     fetchData();
   }, []);
 
@@ -32,7 +42,7 @@ export default function NotificationBell() {
     try {
       const [phrasesRes, goalsRes] = await Promise.all([
         phrasesAPI.getPhrases(1, 100),
-        goalsAPI.getGoals(1, 200),
+        goalsAPI.getGoals(1, 100),
       ]);
 
       if (phrasesRes.items.length > 0) {
@@ -40,10 +50,9 @@ export default function NotificationBell() {
         setPhrase(phrasesRes.items[idx]);
       }
 
-      const goals = goalsRes.items;
-      setWeeklyPending(goals.filter((g: any) => g.categoria === 'weekly' && !g.completado).length);
-      setMonthlyPending(goals.filter((g: any) => g.categoria === 'monthly' && !g.completado).length);
-      setYearlyPending(goals.filter((g: any) => g.categoria === 'yearly' && !g.completado).length);
+      const goals: GoalItem[] = goalsRes.items;
+      setWeeklyGoals(goals.filter(g => normalizeCategory(g.categoria) === 'weekly' && !g.completado));
+      setMonthlyGoals(goals.filter(g => normalizeCategory(g.categoria) === 'monthly' && !g.completado));
       setLoaded(true);
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -57,14 +66,13 @@ export default function NotificationBell() {
     if (next && unread) {
       markBellRead();
       setUnread(false);
+      setReadState(getReadState());
     }
   };
 
-  const notifCount =
-    (weeklyPending > 0 ? 1 : 0) +
-    (monthlyPending > 0 ? 1 : 0) +
-    (yearlyPending > 0 ? 1 : 0) +
-    (phrase ? 1 : 0);
+  const hasPending = weeklyGoals.length > 0 || monthlyGoals.length > 0;
+  const currentInterval = getCurrentInterval();
+  const notifCount = (hasPending ? 1 : 0) + (phrase ? 1 : 0);
 
   return (
     <div className="relative" ref={ref}>
@@ -90,11 +98,12 @@ export default function NotificationBell() {
             </button>
           </div>
 
-          <div className="p-3 space-y-2 max-h-80 overflow-y-auto">
+          <div className="p-3 space-y-2 max-h-96 overflow-y-auto">
             {!loaded ? (
               <p className="text-sm text-muted-foreground text-center py-4">Cargando...</p>
             ) : (
               <>
+                {/* Frase del día */}
                 {phrase && (
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex gap-2">
                     <Quote className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
@@ -107,39 +116,128 @@ export default function NotificationBell() {
                   </div>
                 )}
 
-                {weeklyPending > 0 && (
-                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 flex items-center gap-2">
-                    <Target className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                    <p className="text-xs text-foreground">
-                      <span className="font-semibold">{weeklyPending}</span> objetivo{weeklyPending > 1 ? 's' : ''} semanal{weeklyPending > 1 ? 'es' : ''} pendiente{weeklyPending > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                )}
+                {/* Recordatorio Mañana */}
+                <ReminderCard
+                  interval="morning"
+                  current={currentInterval}
+                  read={readState.morningRead}
+                  weeklyGoals={weeklyGoals}
+                  monthlyGoals={monthlyGoals}
+                />
 
-                {monthlyPending > 0 && (
-                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                    <p className="text-xs text-foreground">
-                      <span className="font-semibold">{monthlyPending}</span> objetivo{monthlyPending > 1 ? 's' : ''} mensual{monthlyPending > 1 ? 'es' : ''} pendiente{monthlyPending > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                )}
+                {/* Recordatorio Tarde */}
+                <ReminderCard
+                  interval="afternoon"
+                  current={currentInterval}
+                  read={readState.afternoonRead}
+                  weeklyGoals={weeklyGoals}
+                  monthlyGoals={monthlyGoals}
+                />
 
-                {yearlyPending > 0 && (
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-center gap-2">
-                    <Star className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                    <p className="text-xs text-foreground">
-                      <span className="font-semibold">{yearlyPending}</span> objetivo{yearlyPending > 1 ? 's' : ''} anual{yearlyPending > 1 ? 'es' : ''} en progreso
-                    </p>
-                  </div>
-                )}
-
-                {!phrase && weeklyPending === 0 && monthlyPending === 0 && yearlyPending === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">Sin notificaciones por ahora</p>
+                {!phrase && !hasPending && (
+                  <p className="text-sm text-muted-foreground text-center py-4">Sin objetivos pendientes</p>
                 )}
               </>
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReminderCard({
+  interval,
+  current,
+  read,
+  weeklyGoals,
+  monthlyGoals,
+}: {
+  interval: 'morning' | 'afternoon';
+  current: 'morning' | 'afternoon';
+  read: boolean;
+  weeklyGoals: GoalItem[];
+  monthlyGoals: GoalItem[];
+}) {
+  const isMorning = interval === 'morning';
+  const isCurrent = interval === current;
+  const hasPending = weeklyGoals.length > 0 || monthlyGoals.length > 0;
+
+  const label = isMorning ? 'Recordatorio Mañana' : 'Recordatorio Tarde';
+  const timeRange = isMorning ? '6:00 – 13:00' : '13:00 – 20:00';
+  const Icon = isMorning ? Sunrise : Sunset;
+
+  const borderClass = isMorning
+    ? 'border-amber-400/40'
+    : 'border-indigo-400/40';
+  const bgClass = isMorning
+    ? 'bg-amber-50/60 dark:bg-amber-950/20'
+    : 'bg-indigo-50/60 dark:bg-indigo-950/20';
+  const iconColor = isMorning ? 'text-amber-500' : 'text-indigo-500';
+  const labelColor = isMorning ? 'text-amber-700 dark:text-amber-400' : 'text-indigo-700 dark:text-indigo-400';
+
+  // Si el intervalo es futuro (tarde cuando es mañana), mostrar placeholder
+  const isFuture = !isCurrent && interval === 'afternoon' && current === 'morning';
+
+  return (
+    <div className={`rounded-lg border p-3 ${bgClass} ${borderClass} ${isCurrent ? 'ring-1 ring-inset ring-current/10' : 'opacity-70'}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Icon className={`h-4 w-4 ${iconColor} flex-shrink-0`} />
+          <span className={`text-xs font-semibold ${labelColor}`}>{label}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground">{timeRange}</span>
+          {read && !isFuture && (
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500 ml-1" />
+          )}
+        </div>
+      </div>
+
+      {/* Contenido */}
+      {isFuture ? (
+        <p className="text-xs text-muted-foreground">Recordatorio pendiente para esta tarde</p>
+      ) : !hasPending ? (
+        <p className="text-xs text-muted-foreground">Sin objetivos pendientes</p>
+      ) : (
+        <div className="space-y-2">
+          {weeklyGoals.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <Target className={`h-3 w-3 ${iconColor}`} />
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Semanales ({weeklyGoals.length})
+                </span>
+              </div>
+              <ul className="space-y-0.5 pl-4">
+                {weeklyGoals.slice(0, 3).map((g, i) => (
+                  <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
+                ))}
+                {weeklyGoals.length > 3 && (
+                  <li className="text-xs text-muted-foreground">+{weeklyGoals.length - 3} más</li>
+                )}
+              </ul>
+            </div>
+          )}
+          {monthlyGoals.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <CalendarDays className={`h-3 w-3 ${iconColor}`} />
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Mensuales ({monthlyGoals.length})
+                </span>
+              </div>
+              <ul className="space-y-0.5 pl-4">
+                {monthlyGoals.slice(0, 3).map((g, i) => (
+                  <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
+                ))}
+                {monthlyGoals.length > 3 && (
+                  <li className="text-xs text-muted-foreground">+{monthlyGoals.length - 3} más</li>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

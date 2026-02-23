@@ -1,21 +1,19 @@
 /**
- * Estado de notificaciones basado en contador de intervalos diarios.
+ * Estado de notificaciones basado en dos intervalos diarios.
  *
- * Lógica:
- * - Hay 2 intervalos por día: mañana (< 13h) y tarde (>= 13h).
- * - Un contador entero (0–2) registra cuántos intervalos ya dispararon hoy.
- * - Si el contador < 2 Y el intervalo actual no ha disparado aún → lanzar.
- * - Al cerrar o ver la notificación → incrementar el contador y registrar el intervalo.
- * - Al cambiar de día → el contador se reinicia automáticamente a 0.
+ * Intervalos:
+ *  - morning: antes de las 13h
+ *  - afternoon: 13h en adelante
+ *
+ * Cada intervalo se registra de forma independiente por día.
+ * El punto rojo de la campana aparece cuando el intervalo actual NO ha sido visto.
  */
 
 const KEYS = {
   date: 'notifDate',
-  count: 'notifIntervalCount',
-  lastInterval: 'notifLastInterval',
+  morningRead: 'notifMorningRead',
+  afternoonRead: 'notifAfternoonRead',
 };
-
-const MAX_PER_DAY = 2;
 
 function getToday(): string {
   return new Date().toISOString().split('T')[0];
@@ -32,45 +30,50 @@ export function getGreeting(): string {
   return 'Buenas noches';
 }
 
-function readState(): { count: number; lastInterval: string | null } {
+function readState(): { morningRead: boolean; afternoonRead: boolean } {
   const today = getToday();
   const savedDate = localStorage.getItem(KEYS.date);
 
   if (savedDate !== today) {
-    // Nuevo día → contador en cero
-    return { count: 0, lastInterval: null };
+    return { morningRead: false, afternoonRead: false };
   }
 
   return {
-    count: parseInt(localStorage.getItem(KEYS.count) || '0', 10),
-    lastInterval: localStorage.getItem(KEYS.lastInterval),
+    morningRead: localStorage.getItem(KEYS.morningRead) === 'true',
+    afternoonRead: localStorage.getItem(KEYS.afternoonRead) === 'true',
   };
 }
 
-/** Devuelve true si la notificación debe lanzarse en este momento. */
-export function shouldShowNotification(): boolean {
-  const { count, lastInterval } = readState();
-  const current = getCurrentInterval();
-  return count < MAX_PER_DAY && lastInterval !== current;
-}
-
-/** Registra que la notificación se mostró en el intervalo actual. */
-export function markNotificationShown(): void {
-  const today = getToday();
-  const { count } = readState();
-  const current = getCurrentInterval();
-
-  localStorage.setItem(KEYS.date, today);
-  localStorage.setItem(KEYS.count, String(Math.min(count + 1, MAX_PER_DAY)));
-  localStorage.setItem(KEYS.lastInterval, current);
-}
-
-/** Devuelve true si la campana tiene notificaciones no vistas en el intervalo actual. */
+/** Devuelve true si el intervalo actual NO ha sido visto hoy. */
 export function isBellUnread(): boolean {
-  return shouldShowNotification();
+  const { morningRead, afternoonRead } = readState();
+  const current = getCurrentInterval();
+  return current === 'morning' ? !morningRead : !afternoonRead;
 }
 
-/** Registra que el usuario vio las notificaciones vía la campana. */
+/** Devuelve si cada recordatorio fue leído hoy. */
+export function getReadState(): { morningRead: boolean; afternoonRead: boolean } {
+  return readState();
+}
+
+/** @deprecated Usar markBellRead() en su lugar. Alias para compatibilidad. */
+export function markNotificationShown(): void {
+  markBellRead();
+}
+
+/** @deprecated Usar isBellUnread() en su lugar. Alias para compatibilidad. */
+export function shouldShowNotification(): boolean {
+  return isBellUnread();
+}
+
+/** Registra que el usuario vio el recordatorio del intervalo actual. */
 export function markBellRead(): void {
-  markNotificationShown();
+  const today = getToday();
+  const current = getCurrentInterval();
+  localStorage.setItem(KEYS.date, today);
+  if (current === 'morning') {
+    localStorage.setItem(KEYS.morningRead, 'true');
+  } else {
+    localStorage.setItem(KEYS.afternoonRead, 'true');
+  }
 }

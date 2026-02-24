@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { X, Target, CalendarDays, Bell } from 'lucide-react';
-import { phrasesAPI, goalsAPI } from '@/services/api';
+import { useEffect, useState, useRef } from 'react';
+import { X, Target, CalendarDays, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { goalsAPI } from '@/services/api';
 import { shouldShowNotification, markNotificationShown, getGreeting } from './notificationState';
 
 type GoalItem = { titulo: string; categoria: string; completado: boolean };
+
+const PREVIEW = 3;
+const AUTO_DISMISS_MS = 20000;
 
 function normalizeCategory(cat: string | null | undefined): string {
   const c = (cat ?? '').toLowerCase().trim();
@@ -17,20 +20,19 @@ export default function WelcomeModal() {
   const [exiting, setExiting] = useState(false);
   const [weeklyGoals, setWeeklyGoals] = useState<GoalItem[]>([]);
   const [monthlyGoals, setMonthlyGoals] = useState<GoalItem[]>([]);
+  const [expandedWeekly, setExpandedWeekly] = useState(false);
+  const [expandedMonthly, setExpandedMonthly] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!shouldShowNotification()) return;
-
     fetchData();
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
 
   const fetchData = async () => {
     try {
-      const [, goalsRes] = await Promise.all([
-        phrasesAPI.getPhrases(1, 1), // solo para no romper la promesa; no la usamos aquí
-        goalsAPI.getGoals(1, 100),
-      ]);
-
+      const goalsRes = await goalsAPI.getGoals(1, 100);
       const goals: GoalItem[] = goalsRes.items;
       const weekly = goals.filter(g => normalizeCategory(g.categoria) === 'weekly' && !g.completado);
       const monthly = goals.filter(g => normalizeCategory(g.categoria) === 'monthly' && !g.completado);
@@ -38,14 +40,10 @@ export default function WelcomeModal() {
       setWeeklyGoals(weekly);
       setMonthlyGoals(monthly);
 
-      // Solo mostrar si hay objetivos pendientes
       if (weekly.length > 0 || monthly.length > 0) {
         setVisible(true);
-
-        // Auto-cerrar después de 10 segundos
-        setTimeout(() => dismiss(), 10000);
+        timerRef.current = setTimeout(() => dismiss(), AUTO_DISMISS_MS);
       } else {
-        // Sin objetivos pendientes: marcar como visto igual
         markNotificationShown();
       }
     } catch (err) {
@@ -54,6 +52,7 @@ export default function WelcomeModal() {
   };
 
   const dismiss = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setExiting(true);
     setTimeout(() => {
       setVisible(false);
@@ -80,8 +79,19 @@ export default function WelcomeModal() {
         }
       `}</style>
 
-      {/* Barra superior de color */}
-      <div className="h-1 bg-gradient-to-r from-amber-400 to-primary" />
+      {/* Barra de progreso auto-cierre */}
+      <div className="h-1 bg-muted overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-amber-400 to-primary"
+          style={{ animation: `shrink ${AUTO_DISMISS_MS}ms linear forwards` }}
+        />
+      </div>
+      <style>{`
+        @keyframes shrink {
+          from { width: 100%; }
+          to   { width: 0%; }
+        }
+      `}</style>
 
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
@@ -106,18 +116,37 @@ export default function WelcomeModal() {
       <div className="px-4 pb-4 space-y-2">
         {weeklyGoals.length > 0 && (
           <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Target className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                Semanales · {weeklyGoals.length}
-              </span>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Target className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                  Semanales · {weeklyGoals.length}
+                </span>
+              </div>
+              {weeklyGoals.length > PREVIEW && (
+                <button
+                  onClick={() => setExpandedWeekly(v => !v)}
+                  className="flex items-center gap-0.5 text-[11px] text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  {expandedWeekly ? (
+                    <><ChevronUp className="h-3 w-3" /> Ver menos</>
+                  ) : (
+                    <><ChevronDown className="h-3 w-3" /> Ver más</>
+                  )}
+                </button>
+              )}
             </div>
             <ul className="space-y-0.5">
-              {weeklyGoals.slice(0, 3).map((g, i) => (
+              {(expandedWeekly ? weeklyGoals : weeklyGoals.slice(0, PREVIEW)).map((g, i) => (
                 <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
               ))}
-              {weeklyGoals.length > 3 && (
-                <li className="text-xs text-muted-foreground">+{weeklyGoals.length - 3} más</li>
+              {!expandedWeekly && weeklyGoals.length > PREVIEW && (
+                <li
+                  className="text-xs text-amber-600 dark:text-amber-400 cursor-pointer hover:underline"
+                  onClick={() => setExpandedWeekly(true)}
+                >
+                  +{weeklyGoals.length - PREVIEW} más — Ver todos
+                </li>
               )}
             </ul>
           </div>
@@ -125,18 +154,37 @@ export default function WelcomeModal() {
 
         {monthlyGoals.length > 0 && (
           <div className="bg-indigo-500/8 border border-indigo-500/20 rounded-xl p-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
-              <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
-                Mensuales · {monthlyGoals.length}
-              </span>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+                  Mensuales · {monthlyGoals.length}
+                </span>
+              </div>
+              {monthlyGoals.length > PREVIEW && (
+                <button
+                  onClick={() => setExpandedMonthly(v => !v)}
+                  className="flex items-center gap-0.5 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  {expandedMonthly ? (
+                    <><ChevronUp className="h-3 w-3" /> Ver menos</>
+                  ) : (
+                    <><ChevronDown className="h-3 w-3" /> Ver más</>
+                  )}
+                </button>
+              )}
             </div>
             <ul className="space-y-0.5">
-              {monthlyGoals.slice(0, 3).map((g, i) => (
+              {(expandedMonthly ? monthlyGoals : monthlyGoals.slice(0, PREVIEW)).map((g, i) => (
                 <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
               ))}
-              {monthlyGoals.length > 3 && (
-                <li className="text-xs text-muted-foreground">+{monthlyGoals.length - 3} más</li>
+              {!expandedMonthly && monthlyGoals.length > PREVIEW && (
+                <li
+                  className="text-xs text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline"
+                  onClick={() => setExpandedMonthly(true)}
+                >
+                  +{monthlyGoals.length - PREVIEW} más — Ver todos
+                </li>
               )}
             </ul>
           </div>

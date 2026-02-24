@@ -139,8 +139,7 @@ export default function Goals() {
   const [allGoalsMapped, setAllGoalsMapped] = useState<Goal[]>([]);
 
   // Cargar objetivos del backend
-  useEffect(() => {
-    const loadGoals = async () => {
+  const loadGoals = async () => {
       try {
         setLoading(true);
         
@@ -223,8 +222,9 @@ export default function Goals() {
       } finally {
         setLoading(false);
       }
-    };
+  };
 
+  useEffect(() => {
     loadGoals();
   }, []);
 
@@ -483,17 +483,9 @@ export default function Goals() {
           scheduledFor: data.scheduledType === 'specific' ? data.scheduledDate : undefined,
         };
         setGoals(prev => [newGoal, ...prev]);
-        
-        // Recargar objetivos desde BD para sincronizar
-        setTimeout(async () => {
-          try {
-            const response = await goalsAPI.getGoals(1, 100);
-            setGoals(response.items || []);
-            console.log('✅ Goals reloaded from DB');
-          } catch (reloadError) {
-            console.warn('Could not reload goals:', reloadError);
-          }
-        }, 500);
+
+        // Recargar con mapeo completo para sincronizar con BD
+        await loadGoals();
         
       } catch (error) {
         console.error('❌ Error creating goal:', error);

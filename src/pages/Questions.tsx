@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircleQuestion, Settings, CheckCircle2, Clock } from 'lucide-react';
+import { MessageCircleQuestion, Settings, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
 import { questionsAPI } from '@/services/api';
 import type { Question } from '@/types';
 
@@ -40,6 +40,7 @@ export default function Questions() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailySession, setDailySession] = useState<{ answered_questions: number; total_questions: number } | null>(null);
+  const [yesterdaySession, setYesterdaySession] = useState<{ answered_questions: number; total_questions: number } | null>(null);
 
   // Cargar preguntas del backend
   useEffect(() => {
@@ -52,8 +53,23 @@ export default function Questions() {
         setQuestions(mappedQuestions);
 
         const todayKey = new Date().toISOString().split('T')[0];
-        const session = await questionsAPI.getDailySession(todayKey);
-        setDailySession(session);
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayKey = yesterdayDate.toISOString().split('T')[0];
+
+        const [session, ySession] = await Promise.all([
+          questionsAPI.getDailySession(todayKey),
+          questionsAPI.getDailySession(yesterdayKey).catch(() => null),
+        ]);
+        // Use responses.length as source of truth (answered_questions in DB can be stale)
+        setDailySession(session ? {
+          answered_questions: session.responses?.length ?? session.answered_questions ?? 0,
+          total_questions: session.total_questions ?? 0,
+        } : null);
+        setYesterdaySession(ySession ? {
+          answered_questions: ySession.responses?.length ?? ySession.answered_questions ?? 0,
+          total_questions: ySession.total_questions ?? 0,
+        } : null);
       } catch (error) {
         console.error('Error loading questions:', error);
       } finally {
@@ -65,7 +81,13 @@ export default function Questions() {
   }, []);
 
   const today = new Date().toISOString().split('T')[0];
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayKey = yesterdayDate.toISOString().split('T')[0];
   const activeQuestions = questions.filter(q => q.active);
+  const yesterdayAnswered = yesterdaySession?.answered_questions ?? 0;
+  const yesterdayTotal = yesterdaySession?.total_questions ?? activeQuestions.length;
+  const yesterdayComplete = yesterdayAnswered > 0 && yesterdayAnswered >= yesterdayTotal && yesterdayTotal > 0;
   
   const answeredCount = dailySession?.answered_questions ?? 0;
   const totalCount = dailySession?.total_questions ?? activeQuestions.length;
@@ -122,7 +144,7 @@ export default function Questions() {
         </div>
 
         {/* Action cards */}
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 gap-4 lg:grid-cols-3">
           {/* Answer questions */}
           <button
             onClick={() => navigate('/questions/answer')}
@@ -145,6 +167,53 @@ export default function Questions() {
               {isComplete 
                 ? 'Revisa tus respuestas del día'
                 : 'Completa las preguntas diarias de reflexión'
+              }
+            </p>
+          </button>
+
+          {/* Ayer */}
+          <button
+            onClick={yesterdayComplete ? undefined : () => navigate(`/questions/answer?date=${yesterdayKey}`)}
+            disabled={yesterdayComplete}
+            className={`relative rounded-2xl p-6 border-2 text-left transition-all ${
+              yesterdayComplete
+                ? 'bg-green-50 border-green-200 cursor-not-allowed opacity-80'
+                : 'group bg-card border-amber-200 hover:scale-105 hover:border-amber-400 hover:shadow-lg'
+            }`}
+          >
+            {/* Overlay de completado */}
+            {yesterdayComplete && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-green-50/80 z-10">
+                <CheckCircle2 className="h-10 w-10 text-green-500 mb-2" />
+                <p className="text-sm font-semibold text-green-700">¡Ya respondidas!</p>
+                <p className="text-xs text-green-600 mt-0.5">Todas las preguntas de ayer completadas</p>
+              </div>
+            )}
+            <div className="flex items-start justify-between mb-4">
+              <div className={`p-3 rounded-xl ${yesterdayComplete ? 'bg-green-100' : 'bg-amber-50'}`}>
+                <CalendarDays className={`h-6 w-6 ${yesterdayComplete ? 'text-green-500' : 'text-amber-500'}`} />
+              </div>
+              {yesterdayComplete ? (
+                <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> Completo
+                </span>
+              ) : yesterdayAnswered > 0 ? (
+                <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                  {yesterdayAnswered}/{yesterdayTotal} respondidas
+                </span>
+              ) : (
+                <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs font-semibold">
+                  Sin respuestas
+                </span>
+              )}
+            </div>
+            <h3 className="text-xl font-heading font-bold text-foreground mb-2">
+              Preguntas de Ayer
+            </h3>
+            <p className="text-muted-foreground text-sm">
+              {yesterdayAnswered > 0
+                ? 'Completa las preguntas que quedaron pendientes'
+                : 'Responde las preguntas del día anterior'
               }
             </p>
           </button>

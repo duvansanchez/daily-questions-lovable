@@ -172,51 +172,56 @@ export default function Questions() {
           </button>
 
           {/* Ayer */}
-          <button
-            onClick={yesterdayComplete ? undefined : () => navigate(`/questions/answer?date=${yesterdayKey}`)}
-            disabled={yesterdayComplete}
-            className={`relative rounded-2xl p-6 border-2 text-left transition-all ${
-              yesterdayComplete
-                ? 'bg-green-50 border-green-200 cursor-not-allowed opacity-80'
-                : 'group bg-card border-amber-200 hover:scale-105 hover:border-amber-400 hover:shadow-lg'
-            }`}
-          >
-            {/* Overlay de completado */}
-            {yesterdayComplete && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-green-50/80 z-10">
-                <CheckCircle2 className="h-10 w-10 text-green-500 mb-2" />
-                <p className="text-sm font-semibold text-green-700">¡Ya respondidas!</p>
-                <p className="text-xs text-green-600 mt-0.5">Todas las preguntas de ayer completadas</p>
-              </div>
-            )}
-            <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 rounded-xl ${yesterdayComplete ? 'bg-green-100' : 'bg-amber-50'}`}>
-                <CalendarDays className={`h-6 w-6 ${yesterdayComplete ? 'text-green-500' : 'text-amber-500'}`} />
-              </div>
-              {yesterdayComplete ? (
+          {yesterdayComplete ? (
+            <div className="rounded-2xl p-6 border-2 border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 text-left">
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 rounded-xl bg-green-100">
+                  <CalendarDays className="h-6 w-6 text-green-600" />
+                </div>
                 <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" /> Completo
                 </span>
-              ) : yesterdayAnswered > 0 ? (
-                <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
-                  {yesterdayAnswered}/{yesterdayTotal} respondidas
-                </span>
-              ) : (
-                <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs font-semibold">
-                  Sin respuestas
-                </span>
-              )}
+              </div>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
+                  <CheckCircle2 className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-green-800">¡Ya respondidas!</p>
+                  <p className="text-xs text-green-600 mt-0.5">Completaste todas las preguntas de ayer</p>
+                </div>
+              </div>
             </div>
-            <h3 className="text-xl font-heading font-bold text-foreground mb-2">
-              Preguntas de Ayer
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              {yesterdayAnswered > 0
-                ? 'Completa las preguntas que quedaron pendientes'
-                : 'Responde las preguntas del día anterior'
-              }
-            </p>
-          </button>
+          ) : (
+            <button
+              onClick={() => navigate(`/questions/answer?date=${yesterdayKey}`)}
+              className="group bg-card rounded-2xl p-6 border-2 border-amber-200 text-left transition-all hover:scale-105 hover:border-amber-400 hover:shadow-lg"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 rounded-xl bg-amber-50">
+                  <CalendarDays className="h-6 w-6 text-amber-500" />
+                </div>
+                {yesterdayAnswered > 0 ? (
+                  <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                    {yesterdayAnswered}/{yesterdayTotal} respondidas
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground text-xs font-semibold">
+                    Sin respuestas
+                  </span>
+                )}
+              </div>
+              <h3 className="text-xl font-heading font-bold text-foreground mb-2">
+                Preguntas de Ayer
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {yesterdayAnswered > 0
+                  ? 'Completa las preguntas que quedaron pendientes'
+                  : 'Responde las preguntas del día anterior'
+                }
+              </p>
+            </button>
+          )}
 
           {/* Admin */}
           <button

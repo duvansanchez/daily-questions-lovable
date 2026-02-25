@@ -21,6 +21,17 @@ export default function ReviewModal({ open, onOpenChange, phrases, categories, o
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') handleNext();
+      else if (e.key === 'ArrowLeft') handlePrevious();
+      else if (e.key === 'Enter') handleMarkAsReviewed();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [open, currentIndex, phrases.length]);
+
   if (!open || phrases.length === 0) return null;
 
   const currentPhrase = phrases[currentIndex];

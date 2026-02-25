@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircleQuestion, Settings, CheckCircle2, Clock, CalendarDays, Eye, Pencil } from 'lucide-react';
+import { MessageCircleQuestion, Settings, CheckCircle2, Clock, CalendarDays, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { questionsAPI } from '@/services/api';
 import type { Question } from '@/types';
 
@@ -41,6 +41,8 @@ export default function Questions() {
   const [loading, setLoading] = useState(true);
   const [dailySession, setDailySession] = useState<{ answered_questions: number; total_questions: number } | null>(null);
   const [yesterdaySession, setYesterdaySession] = useState<{ answered_questions: number; total_questions: number } | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarDays, setCalendarDays] = useState<{ date: string; has_responses: boolean; response_count: number }[]>([]);
 
   // Cargar preguntas del backend
   useEffect(() => {
@@ -79,6 +81,12 @@ export default function Questions() {
 
     loadQuestions();
   }, []);
+
+  useEffect(() => {
+    questionsAPI.getCalendarSummary(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1)
+      .then(data => setCalendarDays(data.days))
+      .catch(() => {});
+  }, [calendarMonth]);
 
   const today = new Date().toISOString().split('T')[0];
   const yesterdayDate = new Date();
@@ -261,6 +269,50 @@ export default function Questions() {
           </button>
         </div>
 
+        {/* Calendar / Historial */}
+        <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Historial de Respuestas</h2>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCalendarMonth(d => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <span className="text-sm font-semibold text-foreground min-w-[120px] text-center capitalize">
+                {calendarMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => setCalendarMonth(d => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                disabled={calendarMonth.getFullYear() === new Date().getFullYear() && calendarMonth.getMonth() === new Date().getMonth()}
+              >
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+          {/* Day headers */}
+          <div className="grid grid-cols-7 mb-2">
+            {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d => (
+              <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-1">{d}</div>
+            ))}
+          </div>
+          {/* Calendar grid */}
+          <CalendarGrid
+            days={calendarDays}
+            month={calendarMonth}
+            today={today}
+            onDayClick={(date) => navigate(`/questions/answer?date=${date}&view=1&history=1`)}
+          />
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            Días con <span className="inline-block w-2 h-2 rounded-full bg-green-500 mx-1 align-middle" />respuestas · Clic para ver
+          </p>
+        </div>
+
         {/* Info section */}
         <div className="bg-accent/50 rounded-xl p-6 border border-border">
           <h3 className="font-semibold text-foreground mb-3">¿Por qué preguntas diarias?</h3>
@@ -284,6 +336,65 @@ export default function Questions() {
           </ul>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CalendarGrid({
+  days,
+  month,
+  today,
+  onDayClick,
+}: {
+  days: { date: string; has_responses: boolean; response_count: number }[];
+  month: Date;
+  today: string;
+  onDayClick: (date: string) => void;
+}) {
+  // First day of month (0=Sun..6=Sat), convert to Mon-first (0=Mon..6=Sun)
+  const firstDow = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
+  const offset = firstDow === 0 ? 6 : firstDow - 1; // blanks before first day
+
+  const dayMap = new Map(days.map(d => [d.date, d]));
+
+  const cells: (string | null)[] = [
+    ...Array(offset).fill(null),
+    ...days.map(d => d.date),
+  ];
+  // pad to full weeks
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div className="grid grid-cols-7 gap-1">
+      {cells.map((date, i) => {
+        if (!date) return <div key={i} />;
+        const info = dayMap.get(date);
+        const isToday = date === today;
+        const hasDot = info?.has_responses ?? false;
+        const dayNum = new Date(date + 'T12:00:00').getDate();
+        const isFuture = date > today;
+
+        return (
+          <button
+            key={date}
+            onClick={() => !isFuture && hasDot && onDayClick(date)}
+            disabled={isFuture || !hasDot}
+            title={hasDot ? `${info!.response_count} respuestas` : 'Sin respuestas'}
+            className={`
+              relative flex flex-col items-center justify-center rounded-lg py-1.5 text-sm font-medium transition-all
+              ${isToday ? 'ring-2 ring-primary ring-offset-1' : ''}
+              ${isFuture ? 'text-muted-foreground/30 cursor-default' :
+                hasDot ? 'text-foreground hover:bg-green-100 cursor-pointer' :
+                'text-muted-foreground cursor-default'}
+            `}
+          >
+            <span>{dayNum}</span>
+            {hasDot && (
+              <span className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full bg-green-500" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

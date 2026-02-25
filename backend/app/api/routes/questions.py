@@ -14,6 +14,8 @@ from app.schemas.schemas import (
 from app.services.question_service import QuestionService, DailySessionService
 from typing import List
 import math
+import calendar as cal_module
+from datetime import date as date_type, timedelta
 
 
 def _build_session_response(session, db: Session, date: str) -> dict:
@@ -116,6 +118,84 @@ def delete_question(question_id: str, db: Session = Depends(get_db)):
 
 
 # ==================== DAILY SESSIONS ====================
+
+@router.get("/daily-sessions/calendar")
+def get_calendar_summary(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    db: Session = Depends(get_db)
+):
+    """Retorna para cada día del mes si tiene respuestas guardadas y cuántas."""
+    first_day = date_type(year, month, 1)
+    last_day = date_type(year, month, cal_module.monthrange(year, month)[1])
+
+    rows = db.execute(
+        text("""
+            SELECT CAST(date AS DATE) as dia, COUNT(DISTINCT question_id) as total
+            FROM response
+            WHERE CAST(date AS DATE) >= :start AND CAST(date AS DATE) <= :end
+            GROUP BY CAST(date AS DATE)
+        """),
+        {"start": first_day.isoformat(), "end": last_day.isoformat()}
+    ).fetchall()
+
+    counts = {str(row[0]): row[1] for row in rows}
+
+    days = []
+    cursor = first_day
+    while cursor <= last_day:
+        d = cursor.isoformat()
+        days.append({
+            "date": d,
+            "has_responses": d in counts,
+            "response_count": counts.get(d, 0),
+        })
+        cursor += timedelta(days=1)
+
+    return {"year": year, "month": month, "days": days}
+
+
+@router.get("/daily-sessions/{date}/history")
+def get_history_session(date: str, db: Session = Depends(get_db)):
+    """
+    Retorna las respuestas de una fecha incluyendo datos de la pregunta
+    (aunque esté desactivada), para la vista de historial.
+    """
+    rows = db.execute(
+        text("""
+            SELECT r.id, r.question_id, r.response, r.date,
+                   q.text as question_text, q.type as question_type,
+                   q.options as question_options, q.active as question_active,
+                   q.categoria as question_category
+            FROM response r
+            LEFT JOIN question q ON q.id = r.question_id
+            WHERE CAST(r.date AS DATE) = :d
+            ORDER BY r.id DESC
+        """),
+        {"d": date}
+    ).fetchall()
+
+    # Deduplicate by question_id (keep latest)
+    seen: set = set()
+    entries = []
+    for row in rows:
+        qid = row[1]
+        if qid not in seen:
+            seen.add(qid)
+            entries.append({
+                "id": str(row[0]),
+                "question_id": str(row[1]),
+                "response": row[2] or "",
+                "answered_at": str(row[3]) if row[3] else "",
+                "question_text": row[4] or "",
+                "question_type": row[5] or "text",
+                "question_options": row[6],
+                "question_active": bool(row[7]) if row[7] is not None else True,
+                "question_category": row[8] or "",
+            })
+
+    return {"date": date, "entries": entries}
+
 
 @router.get("/daily-sessions/{date}", response_model=DailySessionResponse)
 def get_daily_session(date: str, db: Session = Depends(get_db)):

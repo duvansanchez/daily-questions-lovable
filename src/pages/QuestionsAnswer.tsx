@@ -13,18 +13,22 @@ export default function QuestionsAnswer() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const activeQuestions = questions.filter(q => q.active).sort((a, b) => {
-    const aSaved = savedQuestions.has(a.id) ? 1 : 0;
-    const bSaved = savedQuestions.has(b.id) ? 1 : 0;
-    if (aSaved !== bSaved) return aSaved - bSaved;
-    return a.order - b.order;
-  });
-
   const todayKey = new Date().toISOString().split('T')[0];
   const dateParam = searchParams.get('date');
   const targetDate = dateParam ?? todayKey;
   const isYesterday = targetDate !== todayKey;
   const isViewOnly = searchParams.get('view') === '1';
+  const isHistory = searchParams.get('history') === '1';
+
+  // In history mode, show all questions (including inactive); otherwise only active ones
+  const displayQuestions = isHistory
+    ? questions
+    : questions.filter(q => q.active).sort((a, b) => {
+        const aSaved = savedQuestions.has(a.id) ? 1 : 0;
+        const bSaved = savedQuestions.has(b.id) ? 1 : 0;
+        if (aSaved !== bSaved) return aSaved - bSaved;
+        return a.order - b.order;
+      });
 
   const targetDateLabel = new Date(targetDate + 'T12:00:00').toLocaleDateString('es-ES', {
     weekday: 'long',
@@ -33,15 +37,15 @@ export default function QuestionsAnswer() {
     day: 'numeric',
   });
 
-  const answeredCount = activeQuestions.filter(q => {
+  const answeredCount = displayQuestions.filter(q => {
     const v = responses[q.id];
     return v !== undefined && (Array.isArray(v) ? v.length > 0 : v !== '');
   }).length;
-  const totalCount = activeQuestions.length;
+  const totalCount = displayQuestions.length;
   const progress = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
 
   // Preguntas que tienen respuesta en el formulario actual (para el modal de confirmación)
-  const pendingToSave = activeQuestions.filter(q => {
+  const pendingToSave = displayQuestions.filter(q => {
     const v = responses[q.id];
     return v !== undefined && (Array.isArray(v) ? v.length > 0 : v !== '');
   });
@@ -56,45 +60,88 @@ export default function QuestionsAnswer() {
     const loadQuestions = async () => {
       try {
         setLoading(true);
-        const response = await questionsAPI.getQuestions(1, 100, undefined, true, 'diaria');
-        const mapped = response.items.filter(isDailyQuestion).map((item: any): Question => {
-          let parsedOptions = [] as Question['options'];
-          if (item.options) {
-            try { parsedOptions = JSON.parse(item.options); } catch { parsedOptions = []; }
-          }
-          return {
-            id: item.id.toString(),
-            title: item.text,
-            description: item.descripcion || undefined,
-            type: (item.type || 'text') as any,
-            category: item.categoria || 'general',
-            required: item.is_required || false,
-            active: item.active,
-            createdAt: item.created_at,
-            order: 0,
-            options: parsedOptions,
-          };
-        });
-        setQuestions(mapped);
 
-        // Cargar respuestas guardadas del día (hoy o ayer)
-        const session = await questionsAPI.getDailySession(targetDate);
-const initialResponses: Record<string, string | string[]> = {};
-        const alreadySaved = new Set<string>();
+        if (isHistory) {
+          // History mode: load responses with question data from history endpoint
+          const historyData = await questionsAPI.getHistorySession(targetDate);
+          const entries: any[] = historyData.entries ?? [];
 
-        session.responses?.forEach((r: any) => {
-          if (!r.question_id) return;
-          const raw = r.response ?? '';
-          let parsed: string | string[] = raw;
-          if (typeof raw === 'string' && raw.trim().startsWith('[')) {
-            try { parsed = JSON.parse(raw); } catch { /* noop */ }
-          }
-          initialResponses[r.question_id.toString()] = parsed;
-          if (raw !== '') alreadySaved.add(r.question_id.toString());
-        });
+          const mapped = entries.map((entry: any): Question => {
+            let parsedOptions = [] as Question['options'];
+            if (entry.question_options) {
+              try { parsedOptions = JSON.parse(entry.question_options); } catch { parsedOptions = []; }
+            }
+            return {
+              id: entry.question_id.toString(),
+              title: entry.question_text || `Pregunta ${entry.question_id}`,
+              description: undefined,
+              type: (entry.question_type || 'text') as any,
+              category: entry.question_category || 'general',
+              required: false,
+              active: entry.question_active !== false,
+              createdAt: entry.answered_at,
+              order: 0,
+              options: parsedOptions,
+            };
+          });
+          setQuestions(mapped);
 
-        setResponses(initialResponses);
-        setSavedQuestions(alreadySaved);
+          const initialResponses: Record<string, string | string[]> = {};
+          const alreadySaved = new Set<string>();
+          entries.forEach((entry: any) => {
+            const qid = entry.question_id.toString();
+            const raw = entry.response ?? '';
+            let parsed: string | string[] = raw;
+            if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+              try { parsed = JSON.parse(raw); } catch { /* noop */ }
+            }
+            initialResponses[qid] = parsed;
+            if (raw !== '') alreadySaved.add(qid);
+          });
+          setResponses(initialResponses);
+          setSavedQuestions(alreadySaved);
+        } else {
+          // Normal mode: load active questions + session responses
+          const response = await questionsAPI.getQuestions(1, 100, undefined, true, 'diaria');
+          const mapped = response.items.filter(isDailyQuestion).map((item: any): Question => {
+            let parsedOptions = [] as Question['options'];
+            if (item.options) {
+              try { parsedOptions = JSON.parse(item.options); } catch { parsedOptions = []; }
+            }
+            return {
+              id: item.id.toString(),
+              title: item.text,
+              description: item.descripcion || undefined,
+              type: (item.type || 'text') as any,
+              category: item.categoria || 'general',
+              required: item.is_required || false,
+              active: item.active,
+              createdAt: item.created_at,
+              order: 0,
+              options: parsedOptions,
+            };
+          });
+          setQuestions(mapped);
+
+          // Cargar respuestas guardadas del día (hoy o ayer)
+          const session = await questionsAPI.getDailySession(targetDate);
+          const initialResponses: Record<string, string | string[]> = {};
+          const alreadySaved = new Set<string>();
+
+          session.responses?.forEach((r: any) => {
+            if (!r.question_id) return;
+            const raw = r.response ?? '';
+            let parsed: string | string[] = raw;
+            if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+              try { parsed = JSON.parse(raw); } catch { /* noop */ }
+            }
+            initialResponses[r.question_id.toString()] = parsed;
+            if (raw !== '') alreadySaved.add(r.question_id.toString());
+          });
+
+          setResponses(initialResponses);
+          setSavedQuestions(alreadySaved);
+        }
       } catch (error) {
         console.error('Error loading questions:', error);
       } finally {
@@ -159,20 +206,30 @@ const initialResponses: Record<string, string | string[]> = {};
         <div className="bg-card rounded-2xl p-6 border border-border shadow-sm">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                {isYesterday && (
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                {isHistory && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                    <CalendarDays className="h-3 w-3" />
+                    Historial
+                  </span>
+                )}
+                {!isHistory && isYesterday && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-xs font-semibold">
                     <CalendarDays className="h-3 w-3" />
                     Ayer
                   </span>
                 )}
-                {isViewOnly && (
+                {!isHistory && isViewOnly && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-semibold">
                     Solo lectura
                   </span>
                 )}
                 <h1 className="text-2xl font-heading font-bold text-foreground">
-                  {isYesterday ? (isViewOnly ? 'Respuestas de Ayer' : 'Preguntas de Ayer') : 'Preguntas del Día'}
+                  {isHistory
+                    ? 'Respuestas del Día'
+                    : isYesterday
+                      ? (isViewOnly ? 'Respuestas de Ayer' : 'Preguntas de Ayer')
+                      : 'Preguntas del Día'}
                 </h1>
               </div>
               <p className="text-sm text-muted-foreground capitalize">{targetDateLabel}</p>
@@ -194,8 +251,12 @@ const initialResponses: Record<string, string | string[]> = {};
         <div className="space-y-4">
           {loading ? (
             <div className="text-sm text-muted-foreground">Cargando preguntas...</div>
+          ) : displayQuestions.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              No hay respuestas registradas para este día.
+            </div>
           ) : (
-            activeQuestions.map((question, index) => (
+            displayQuestions.map((question, index) => (
               <QuestionCard
                 key={question.id}
                 question={question}
@@ -203,14 +264,15 @@ const initialResponses: Record<string, string | string[]> = {};
                 value={responses[question.id]}
                 isSaved={savedQuestions.has(question.id)}
                 onChange={(value) => handleResponse(question.id, value)}
-                readOnly={isViewOnly}
+                readOnly={isViewOnly || isHistory}
+                showDeactivatedBadge={isHistory && !question.active}
               />
             ))
           )}
         </div>
 
         {/* Guardar button / Editar button */}
-        {!loading && (
+        {!loading && !isHistory && (
           <div className="sticky bottom-6 flex justify-center pb-2">
             {isViewOnly ? (
               <button
@@ -315,6 +377,7 @@ function QuestionCard({
   isSaved,
   onChange,
   readOnly = false,
+  showDeactivatedBadge = false,
 }: {
   question: Question;
   index: number;
@@ -322,6 +385,7 @@ function QuestionCard({
   isSaved: boolean;
   onChange: (value: string | string[]) => void;
   readOnly?: boolean;
+  showDeactivatedBadge?: boolean;
 }) {
   const isAnswered = value !== undefined && (Array.isArray(value) ? value.length > 0 : value !== '');
 
@@ -373,11 +437,18 @@ function QuestionCard({
             <p className="text-sm text-muted-foreground">{question.description}</p>
           )}
         </div>
-        {(readOnly || isSaved) && isAnswered && (
-          <span className="flex-shrink-0 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-            Guardada
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1">
+          {showDeactivatedBadge && (
+            <span className="flex-shrink-0 text-xs font-medium text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full">
+              Desactivada
+            </span>
+          )}
+          {(readOnly || isSaved) && isAnswered && (
+            <span className="flex-shrink-0 text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+              Guardada
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Question input / read-only display */}

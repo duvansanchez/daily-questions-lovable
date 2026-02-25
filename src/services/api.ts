@@ -289,6 +289,16 @@ export const questionsAPI = {
     if (!r.ok) throw new Error('Error saving response');
     return r.json();
   },
+  getCalendarSummary: async (year: number, month: number) => {
+    const r = await fetch(`${API_BASE_URL}/daily-sessions/calendar?year=${year}&month=${month}`);
+    if (!r.ok) throw new Error('Error fetching calendar');
+    return r.json();
+  },
+  getHistorySession: async (date: string) => {
+    const r = await fetch(`${API_BASE_URL}/daily-sessions/${date}/history`);
+    if (!r.ok) throw new Error('Error fetching history');
+    return r.json();
+  },
 };
 
 /**

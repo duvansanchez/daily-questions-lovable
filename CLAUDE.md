@@ -80,6 +80,18 @@ Hay dos `.env` separados, **no se pisan**:
 
 `VITE_API_URL` por defecto es `http://localhost:3001/api`. Cambiarlo solo cuando se use un túnel o servidor remoto.
 
+## Reglas de conducta
+
+- Antes de recomendar herramientas o servicios externos, listar TODOS
+  los requisitos (costos, prerrequisitos, limitaciones) antes de que
+  el usuario tome una decisión.
+- No dar recomendaciones a medias. Si no estoy seguro de todos los
+  requisitos de una opción, investigar primero antes de sugerirla.
+
+## Git
+
+No hacer `git commit` ni `git push` a menos que el usuario lo pida explícitamente.
+
 ## Convención de documentación
 
 Los archivos `.md` de documentación del proyecto van en `docs/proyect/`. No crear archivos `.md` en la raíz ni en otras carpetas salvo que el usuario lo pida explícitamente.

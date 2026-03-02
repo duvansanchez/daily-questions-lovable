@@ -1,8 +1,37 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
-import { questionsAPI } from '@/services/api';
+import { Plus, Search, Edit2, Trash2, ToggleLeft, ToggleRight, Clock3, Send } from 'lucide-react';
+import { questionsAPI, reportsAPI } from '@/services/api';
 import QuestionModal from '@/components/questions/QuestionModal';
 import type { Question, QuestionCategory } from '@/types';
+
+type ReportScheduleState = {
+  enabled: boolean;
+  day_of_week: string;
+  hour: number;
+  minute: number;
+};
+
+type ReportHistoryItem = {
+  timestamp: string;
+  type: string;
+  status: string;
+  week_label: string;
+  source: string;
+  details?: {
+    days_completed?: number;
+    total_responses?: number;
+  };
+};
+
+const dayLabels: Record<string, string> = {
+  mon: 'Lunes',
+  tue: 'Martes',
+  wed: 'Miércoles',
+  thu: 'Jueves',
+  fri: 'Viernes',
+  sat: 'Sábado',
+  sun: 'Domingo',
+};
 
 export default function QuestionsAdmin() {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -12,6 +41,20 @@ export default function QuestionsAdmin() {
   const [showModal, setShowModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [sendingPartial, setSendingPartial] = useState(false);
+  const [sendingPrevious, setSendingPrevious] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleSuccess, setScheduleSuccess] = useState<string | null>(null);
+  const [nextRunTime, setNextRunTime] = useState<string | null>(null);
+  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>([]);
+  const [schedule, setSchedule] = useState<ReportScheduleState>({
+    enabled: true,
+    day_of_week: 'mon',
+    hour: 7,
+    minute: 0,
+  });
 
   const mapBackendQuestion = (item: any): Question => {
     let parsedOptions = [] as Question['options'];
@@ -39,6 +82,36 @@ export default function QuestionsAdmin() {
   };
 
   useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const history = await reportsAPI.getHistory(5);
+        setReportHistory(Array.isArray(history.items) ? history.items : []);
+      } catch (error) {
+        console.error('Error loading report history:', error);
+      }
+    };
+
+    const loadSchedule = async () => {
+      try {
+        setScheduleLoading(true);
+        setScheduleError(null);
+        const state = await reportsAPI.getSchedule();
+        const config = state.config ?? {};
+        setSchedule({
+          enabled: Boolean(config.enabled),
+          day_of_week: config.day_of_week || 'mon',
+          hour: Number.isInteger(config.hour) ? config.hour : 7,
+          minute: Number.isInteger(config.minute) ? config.minute : 0,
+        });
+        setNextRunTime(state.next_run_time || null);
+      } catch (error) {
+        console.error('Error loading report schedule:', error);
+        setScheduleError('No se pudo cargar la configuración del informe');
+      } finally {
+        setScheduleLoading(false);
+      }
+    };
+
     const loadQuestions = async () => {
       try {
         setLoading(true);
@@ -62,8 +135,68 @@ export default function QuestionsAdmin() {
       }
     };
 
+    loadHistory();
+    loadSchedule();
     loadQuestions();
   }, []);
+
+  const handleSaveSchedule = async () => {
+    try {
+      setScheduleSaving(true);
+      setScheduleError(null);
+      setScheduleSuccess(null);
+
+      const state = await reportsAPI.updateSchedule(schedule);
+      const updated = state.config;
+      setSchedule({
+        enabled: Boolean(updated.enabled),
+        day_of_week: updated.day_of_week,
+        hour: updated.hour,
+        minute: updated.minute,
+      });
+      setNextRunTime(state.next_run_time || null);
+      setScheduleSuccess('Programación del informe actualizada');
+    } catch (error) {
+      console.error('Error updating report schedule:', error);
+      setScheduleError('No se pudo actualizar la programación del informe');
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const handleSendCurrentWeek = async () => {
+    try {
+      setSendingPartial(true);
+      setScheduleError(null);
+      setScheduleSuccess(null);
+      const result = await reportsAPI.sendCurrentWeekReport();
+      const history = await reportsAPI.getHistory(5);
+      setReportHistory(Array.isArray(history.items) ? history.items : []);
+      setScheduleSuccess(`Informe parcial enviado: ${result.week}`);
+    } catch (error) {
+      console.error('Error sending current week report:', error);
+      setScheduleError('No se pudo enviar el informe parcial');
+    } finally {
+      setSendingPartial(false);
+    }
+  };
+
+  const handleSendPreviousWeek = async () => {
+    try {
+      setSendingPrevious(true);
+      setScheduleError(null);
+      setScheduleSuccess(null);
+      const result = await reportsAPI.sendPreviousWeekReport();
+      const history = await reportsAPI.getHistory(5);
+      setReportHistory(Array.isArray(history.items) ? history.items : []);
+      setScheduleSuccess(`Informe semanal enviado: ${result.week}`);
+    } catch (error) {
+      console.error('Error sending previous week report:', error);
+      setScheduleError('No se pudo enviar el informe semanal de la semana anterior');
+    } finally {
+      setSendingPrevious(false);
+    }
+  };
 
   const filteredQuestions = questions
     .filter(q => {
@@ -162,6 +295,13 @@ export default function QuestionsAdmin() {
 
   const activeCount = questions.filter(q => q.active).length;
   const totalCount = questions.length;
+  const lastReport = reportHistory[0];
+
+  const getReportTypeLabel = (type: string) => {
+    if (type === 'weekly_partial_current') return 'Parcial semana actual';
+    if (type === 'weekly_previous') return 'Semana anterior';
+    return type;
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -223,6 +363,114 @@ export default function QuestionsAdmin() {
               {showInactive ? 'Ocultar inactivas' : `Mostrar inactivas (${questions.filter(q => !q.active).length})`}
             </button>
           </div>
+        </div>
+
+        {/* Report schedule */}
+        <div className="bg-card rounded-xl p-4 border border-border shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <Clock3 className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Informe semanal por correo</h2>
+          </div>
+
+          {scheduleLoading ? (
+            <p className="text-sm text-muted-foreground">Cargando configuración...</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <label className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 md:col-span-1">
+                  <input
+                    type="checkbox"
+                    checked={schedule.enabled}
+                    onChange={(e) => setSchedule(prev => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  <span className="text-sm text-foreground">Activar automático</span>
+                </label>
+
+                <select
+                  value={schedule.day_of_week}
+                  onChange={(e) => setSchedule(prev => ({ ...prev, day_of_week: e.target.value }))}
+                  className="px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {Object.entries(dayLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+
+                <input
+                  type="time"
+                  value={`${String(schedule.hour).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const [hourStr, minuteStr] = e.target.value.split(':');
+                    setSchedule(prev => ({
+                      ...prev,
+                      hour: Number(hourStr),
+                      minute: Number(minuteStr),
+                    }));
+                  }}
+                  className="px-3 py-2 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+
+                <button
+                  onClick={handleSaveSchedule}
+                  disabled={scheduleSaving}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {scheduleSaving ? 'Guardando...' : 'Guardar horario'}
+                </button>
+              </div>
+
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  El envío automático solo funciona mientras el backend esté corriendo.
+                  {nextRunTime ? ` Próxima ejecución: ${new Date(nextRunTime).toLocaleString('es-CO')}` : ''}
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={handleSendPreviousWeek}
+                    disabled={sendingPrevious}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-input bg-background hover:bg-muted text-foreground disabled:opacity-60"
+                  >
+                    <Send className="h-4 w-4" />
+                    {sendingPrevious ? 'Enviando...' : 'Enviar semana anterior ahora'}
+                  </button>
+
+                  <button
+                    onClick={handleSendCurrentWeek}
+                    disabled={sendingPartial}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-input bg-background hover:bg-muted text-foreground disabled:opacity-60"
+                  >
+                    <Send className="h-4 w-4" />
+                    {sendingPartial ? 'Enviando...' : 'Enviar acumulado de esta semana'}
+                  </button>
+                </div>
+              </div>
+
+              {scheduleError && <p className="text-sm text-destructive">{scheduleError}</p>}
+              {scheduleSuccess && <p className="text-sm text-success">{scheduleSuccess}</p>}
+
+              <div className="rounded-lg border border-border bg-background p-3 space-y-2">
+                <p className="text-sm font-medium text-foreground">Último envío</p>
+                {lastReport ? (
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(lastReport.timestamp).toLocaleString('es-CO')} · {getReportTypeLabel(lastReport.type)} · {lastReport.source === 'automatic' ? 'Automático' : 'Manual'} · {lastReport.status === 'sent' ? 'Enviado' : 'Fallido'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Aún no hay envíos registrados</p>
+                )}
+
+                {reportHistory.length > 0 && (
+                  <div className="space-y-1">
+                    {reportHistory.slice(0, 3).map((item, idx) => (
+                      <p key={`${item.timestamp}-${idx}`} className="text-xs text-muted-foreground">
+                        {new Date(item.timestamp).toLocaleString('es-CO')} · {getReportTypeLabel(item.type)} · {item.status === 'sent' ? 'OK' : 'Error'}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Questions list */}

@@ -302,6 +302,61 @@ export const questionsAPI = {
 };
 
 /**
+ * Reports API
+ */
+export const reportsAPI = {
+  getHistory: async (limit = 5) => {
+    const response = await fetch(`${API_BASE_URL}/reports/history?limit=${limit}`);
+    if (!response.ok) throw new Error('Error fetching reports history');
+    return response.json();
+  },
+  getSchedule: async () => {
+    const response = await fetch(`${API_BASE_URL}/reports/schedule`);
+    if (!response.ok) throw new Error('Error fetching report schedule');
+    return response.json();
+  },
+  updateSchedule: async (payload: {
+    enabled?: boolean;
+    day_of_week?: string;
+    hour?: number;
+    minute?: number;
+  }) => {
+    const response = await fetch(`${API_BASE_URL}/reports/schedule`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Error updating report schedule');
+    }
+    return response.json();
+  },
+  sendCurrentWeekReport: async () => {
+    const response = await fetch(`${API_BASE_URL}/reports/send-current-week`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Error sending current week report');
+    }
+    return response.json();
+  },
+  sendPreviousWeekReport: async () => {
+    const response = await fetch(`${API_BASE_URL}/reports/send-weekly`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Error sending previous week report');
+    }
+    return response.json();
+  },
+};
+
+/**
  * Función auxiliar para hacer fetch con manejo de errores
  */
 export const fetchAPI = async (url: string, options?: RequestInit) => {

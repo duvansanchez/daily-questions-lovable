@@ -27,9 +27,8 @@ try:
     from app.api import api_router
     print("✅ API router importado", flush=True)
 
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-    print("✅ APScheduler importado", flush=True)
+    from app.services.report_scheduler_service import initialize_scheduler
+    print("✅ Scheduler service importado", flush=True)
 
 except Exception as e:
     print(f"❌ Error en importaciones: {e}", flush=True)
@@ -99,6 +98,7 @@ def _scheduled_weekly_report():
         from app.db.database import get_session_factory
         from app.services.stats_service import get_previous_week_range, build_weekly_report
         from app.services.email_service import build_html_report, send_weekly_report
+        from app.services.report_scheduler_service import record_report_event
 
         session_factory = get_session_factory()
         db = session_factory()
@@ -109,8 +109,28 @@ def _scheduled_weekly_report():
             subject = f"Informe Semanal - {data['week_label']}"
             ok = send_weekly_report(html, subject)
             if ok:
+                record_report_event(
+                    report_type="weekly_previous",
+                    status="sent",
+                    week_label=data["week_label"],
+                    source="automatic",
+                    details={
+                        "days_completed": data["days_completed"],
+                        "total_responses": data["total_responses"],
+                    },
+                )
                 logger.info(f"[Scheduler] Informe enviado: {data['week_label']}")
             else:
+                record_report_event(
+                    report_type="weekly_previous",
+                    status="failed",
+                    week_label=data["week_label"],
+                    source="automatic",
+                    details={
+                        "days_completed": data["days_completed"],
+                        "total_responses": data["total_responses"],
+                    },
+                )
                 logger.error("[Scheduler] Error enviando el informe semanal")
         finally:
             db.close()
@@ -118,15 +138,15 @@ def _scheduled_weekly_report():
         logger.error(f"[Scheduler] Error en job semanal: {exc}", exc_info=True)
 
 
-scheduler = BackgroundScheduler(timezone="America/Bogota")
-scheduler.add_job(
-    _scheduled_weekly_report,
-    CronTrigger(day_of_week="mon", hour=7, minute=0),
-    id="weekly_report",
-    replace_existing=True,
-)
-scheduler.start()
-logger.info("[Scheduler] Iniciado - informe semanal cada lunes a las 7:00 AM (America/Bogota)")
+scheduler_state = initialize_scheduler(_scheduled_weekly_report)
+cfg = scheduler_state["config"]
+if cfg["enabled"]:
+    logger.info(
+        f"[Scheduler] Iniciado - informe semanal {cfg['day_of_week']} {cfg['hour']:02d}:{cfg['minute']:02d} "
+        f"({scheduler_state['timezone']})"
+    )
+else:
+    logger.info("[Scheduler] Iniciado en modo deshabilitado")
 
 
 if __name__ == "__main__":

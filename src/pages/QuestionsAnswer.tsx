@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock, Save, AlertCircle, CalendarDays, Pencil } from 'lucide-react';
 import { questionsAPI } from '@/services/api';
+import { getLocalDateString } from '@/lib/utils';
 import type { Question } from '@/types';
 
 export default function QuestionsAnswer() {
@@ -13,7 +14,7 @@ export default function QuestionsAnswer() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const todayKey = new Date().toISOString().split('T')[0];
+  const todayKey = getLocalDateString();
   const dateParam = searchParams.get('date');
   const targetDate = dateParam ?? todayKey;
   const isYesterday = targetDate !== todayKey;

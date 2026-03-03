@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircleQuestion, Settings, CheckCircle2, Clock, CalendarDays, Eye, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { questionsAPI } from '@/services/api';
+import { getLocalDateString } from '@/lib/utils';
 import type { Question } from '@/types';
 
 // Mapear datos del backend al formato frontend
@@ -54,10 +55,10 @@ export default function Questions() {
         const mappedQuestions = dailyItems.map(mapBackendQuestion);
         setQuestions(mappedQuestions);
 
-        const todayKey = new Date().toISOString().split('T')[0];
+        const todayKey = getLocalDateString();
         const yesterdayDate = new Date();
         yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-        const yesterdayKey = yesterdayDate.toISOString().split('T')[0];
+        const yesterdayKey = getLocalDateString(yesterdayDate);
 
         const [session, ySession] = await Promise.all([
           questionsAPI.getDailySession(todayKey),
@@ -88,10 +89,10 @@ export default function Questions() {
       .catch(() => {});
   }, [calendarMonth]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const yesterdayDate = new Date();
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterdayKey = yesterdayDate.toISOString().split('T')[0];
+  const yesterdayKey = getLocalDateString(yesterdayDate);
   const activeQuestions = questions.filter(q => q.active);
   const yesterdayAnswered = yesterdaySession?.answered_questions ?? 0;
   const yesterdayTotal = yesterdaySession?.total_questions ?? activeQuestions.length;

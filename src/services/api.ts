@@ -148,6 +148,16 @@ export const phrasesAPI = {
     return response.json();
   },
 
+  createPhrase: async (payload: Record<string, unknown>) => {
+    const response = await fetch(`${API_BASE_URL}/phrases`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('Error creating phrase');
+    return response.json();
+  },
+
   updatePhrase: async (phraseId: number | string, payload: Record<string, unknown>) => {
     const response = await fetch(`${API_BASE_URL}/phrases/${phraseId}`, {
       method: 'PATCH',
@@ -363,23 +373,47 @@ export const reportsAPI = {
   },
 };
 
+export interface ReviewPlanConfig {
+  shuffle: boolean;
+  daily_limit: number | null;
+  excluded_phrase_ids: number[];
+}
+
+export interface ReviewPlanData {
+  id: number;
+  name: string;
+  targets: string[];
+  config: ReviewPlanConfig;
+  created_at?: string;
+}
+
 /**
  * Review Plans API
  */
 export const reviewPlansAPI = {
-  getPlans: async (): Promise<{ id: number; name: string; targets: string[]; created_at?: string }[]> => {
+  getPlans: async (): Promise<ReviewPlanData[]> => {
     const response = await fetch(`${API_BASE_URL}/phrases/review-plans`);
     if (!response.ok) throw new Error('Error fetching review plans');
     return response.json();
   },
 
-  createPlan: async (data: { name: string; targets: string[] }): Promise<{ id: number; name: string; targets: string[]; created_at?: string }> => {
+  createPlan: async (data: { name: string; targets: string[] }): Promise<ReviewPlanData> => {
     const response = await fetch(`${API_BASE_URL}/phrases/review-plans`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Error creating review plan');
+    return response.json();
+  },
+
+  updatePlan: async (id: number, config: ReviewPlanConfig): Promise<ReviewPlanData> => {
+    const response = await fetch(`${API_BASE_URL}/phrases/review-plans/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config }),
+    });
+    if (!response.ok) throw new Error('Error updating review plan config');
     return response.json();
   },
 

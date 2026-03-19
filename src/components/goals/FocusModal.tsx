@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Pause, Play, RotateCcw, Save, X, Bold, Italic, List, ListChecks, Code, Heading1, Heading2, Heading3, Minus } from 'lucide-react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import { CheckCircle2, Pause, Play, RotateCcw, Save, X, Bold, Italic, List, ListChecks, Code, Heading1, Heading2, Heading3, Minus, Pencil, ChevronRight } from 'lucide-react';
 import type { SubGoal, Goal } from '../../types';
+import { renderMarkdownPreview } from '@/utils/markdownPreview';
 
 interface FocusModalProps {
   open: boolean;
@@ -19,6 +20,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
   const [notes, setNotes] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [editDraft, setEditDraft] = useState('');
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   
@@ -35,14 +37,14 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
       setNotes(subGoal.notes || '');
       setTimerState('idle');
       setHasUnsavedChanges(false);
-      // Solo resetear isEditingNotes si el modal se estaba cerrando (abre por primera vez)
       if (!prevOpenRef.current) {
         setIsEditingNotes(false);
       }
       setHeadingMenuOpen(false);
+      setEditDraft('');
     }
     prevOpenRef.current = open;
-  }, [open, subGoal]);
+  }, [open, subGoal?.id]);
 
   // Timer logic
   useEffect(() => {
@@ -122,54 +124,50 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
     }
   };
 
-  const handleSave = (showNotification = true) => {
+  const handleSave = (showNotification = true, notesOverride?: string) => {
     if (!subGoal) return;
-    
+
     onSave(subGoal.id, {
       focusTimeSeconds: seconds,
-      notes: notes,
+      notes: notesOverride ?? notes,
     });
-    
+
     setHasUnsavedChanges(false);
-    
+
     if (showNotification) {
-      // Aquí podrías mostrar un toast de éxito
       console.log('Progreso guardado');
     }
   };
 
   const handleComplete = () => {
     if (!subGoal) return;
-    
-    // Pausar timer si está corriendo
+
     if (timerState === 'running') {
       setTimerState('paused');
     }
-    
-    // Guardar estado final
+
+    // Si el editor está abierto, usar editDraft como fuente de verdad
+    const notesToSave = isEditingNotes ? editDraft : notes;
     onSave(subGoal.id, {
       focusTimeSeconds: seconds,
-      notes: notes,
+      notes: notesToSave,
     });
-    
-    // Marcar como completado
+
     onComplete(subGoal.id);
-    
-    // Cerrar modal
     onOpenChange(false);
   };
 
   const handleClose = () => {
-    // Pausar timer si está corriendo
     if (timerState === 'running') {
       setTimerState('paused');
     }
-    
-    // Guardar si hay cambios
-    if (hasUnsavedChanges) {
-      handleSave(false);
+
+    // Si el editor está abierto, usar editDraft como fuente de verdad
+    const notesToSave = isEditingNotes ? editDraft : notes;
+    if (hasUnsavedChanges || isEditingNotes) {
+      handleSave(false, notesToSave);
     }
-    
+
     onOpenChange(false);
   };
 
@@ -184,19 +182,34 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Editor de notas - funciones de formato
+  const openEditor = () => {
+    setEditDraft(notes);
+    setIsEditingNotes(true);
+  };
+
+  const closeEditor = (save: boolean) => {
+    if (save) {
+      setNotes(editDraft);
+      setHasUnsavedChanges(true);
+    }
+    setIsEditingNotes(false);
+    setHeadingMenuOpen(false);
+    setColorMenuOpen(false);
+  };
+
+  // Editor de notas - funciones de formato (operan sobre editDraft)
   const insertFormatting = (prefix: string, suffix: string = prefix) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = notes.substring(start, end);
-    const beforeText = notes.substring(0, start);
-    const afterText = notes.substring(end);
+    const selectedText = editDraft.substring(start, end);
+    const beforeText = editDraft.substring(0, start);
+    const afterText = editDraft.substring(end);
 
     const newText = beforeText + prefix + selectedText + suffix + afterText;
-    setNotes(newText);
+    setEditDraft(newText);
 
     // Restaurar focus y selección
     setTimeout(() => {
@@ -214,16 +227,15 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    
-    // Encontrar el inicio de la línea actual
-    const beforeCursor = notes.substring(0, start);
+
+    const beforeCursor = editDraft.substring(0, start);
     const lineStart = beforeCursor.lastIndexOf('\n') + 1;
-    
-    const beforeText = notes.substring(0, lineStart);
-    const lineAndAfter = notes.substring(lineStart);
-    
+
+    const beforeText = editDraft.substring(0, lineStart);
+    const lineAndAfter = editDraft.substring(lineStart);
+
     const newText = beforeText + linePrefix + lineAndAfter;
-    setNotes(newText);
+    setEditDraft(newText);
 
     setTimeout(() => {
       textarea.focus();
@@ -236,10 +248,105 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
 
   const toggleBold = () => insertFormatting('**');
   const toggleItalic = () => insertFormatting('*');
-  const insertCheckbox = () => insertAtLine('- [ ] ');
+  const insertCheckbox = () => insertAtLine('- [] ');
+  const insertChildCheckbox = () => insertAtLine('  - [] ');
   const insertBulletList = () => insertAtLine('- ');
   const insertCodeBlock = () => insertFormatting('\n```\n', '\n```\n');
   const insertDivider = () => insertAtLine('\n---\n');
+  const insertToggle = () => insertAtLine('> ');
+
+  const handleNotesKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Tab') return;
+
+    event.preventDefault();
+
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentText = editDraft;
+
+    const hasSelection = start !== end;
+
+    if (!hasSelection) {
+      const lineStart = currentText.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+      const lineEndIndex = currentText.indexOf('\n', start);
+      const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
+      const lineText = currentText.slice(lineStart, lineEnd);
+
+      if (event.shiftKey) {
+        let removeCount = 0;
+        if (lineText.startsWith('  ')) removeCount = 2;
+        else if (lineText.startsWith(' ') || lineText.startsWith('\t')) removeCount = 1;
+        if (removeCount === 0) return;
+
+        const updatedLine = lineText.slice(removeCount);
+        const newText = currentText.slice(0, lineStart) + updatedLine + currentText.slice(lineEnd);
+        const newCursor = Math.max(lineStart, start - removeCount);
+
+        setEditDraft(newText);
+        window.setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(newCursor, newCursor);
+        }, 0);
+        return;
+      }
+
+      const updatedLine = `  ${lineText}`;
+      const newText = currentText.slice(0, lineStart) + updatedLine + currentText.slice(lineEnd);
+      const newCursor = start + 2;
+
+      setEditDraft(newText);
+      window.setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(newCursor, newCursor);
+      }, 0);
+      return;
+    }
+
+    const lineStart = currentText.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const effectiveEnd = end > start && currentText[end - 1] === '\n' ? end - 1 : end;
+    const lineEndIndex = currentText.indexOf('\n', effectiveEnd);
+    const lineEnd = lineEndIndex === -1 ? currentText.length : lineEndIndex;
+
+    const selectedBlock = currentText.slice(lineStart, lineEnd);
+    const lines = selectedBlock.split('\n');
+    if (lines.length === 0) return;
+
+    let transformedLines: string[];
+    let newStart = start;
+    let newEnd = end;
+
+    if (event.shiftKey) {
+      const removedPerLine = lines.map(line => {
+        if (line.startsWith('  ')) return 2;
+        if (line.startsWith(' ') || line.startsWith('\t')) return 1;
+        return 0;
+      });
+
+      transformedLines = lines.map((line, index) => line.slice(removedPerLine[index]));
+
+      const removedFromFirstLine = removedPerLine[0] || 0;
+      const removedTotal = removedPerLine.reduce((sum, count) => sum + count, 0);
+
+      newStart = Math.max(lineStart, start - removedFromFirstLine);
+      newEnd = Math.max(newStart, end - removedTotal);
+    } else {
+      transformedLines = lines.map(line => `  ${line}`);
+      const addedTotal = lines.length * 2;
+
+      newStart = start + 2;
+      newEnd = end + addedTotal;
+    }
+
+    const updatedBlock = transformedLines.join('\n');
+    const newText = currentText.slice(0, lineStart) + updatedBlock + currentText.slice(lineEnd);
+
+    setEditDraft(newText);
+    window.setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newStart, newEnd);
+    }, 0);
+  };
 
   const insertHeading = (level: 1 | 2 | 3) => {
     const prefix = '#'.repeat(level) + ' ';
@@ -253,12 +360,12 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = notes.substring(start, end) || 'texto resaltado';
-    const beforeText = notes.substring(0, start);
-    const afterText = notes.substring(end);
+    const selectedText = editDraft.substring(start, end) || 'texto resaltado';
+    const beforeText = editDraft.substring(0, start);
+    const afterText = editDraft.substring(end);
 
     const newText = beforeText + `{${color}:${selectedText}}` + afterText;
-    setNotes(newText);
+    setEditDraft(newText);
 
     setTimeout(() => {
       textarea.focus();
@@ -267,98 +374,7 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
     setColorMenuOpen(false);
   };
 
-  // Renderizar markdown preview (simple)
-  const renderPreview = (text: string) => {
-    const highlightMap: Record<string, string> = {
-      'yellow': 'bg-yellow-200 text-yellow-900',
-      'pink': 'bg-pink-200 text-pink-900',
-      'blue': 'bg-blue-200 text-blue-900',
-      'green': 'bg-green-200 text-green-900',
-      'purple': 'bg-purple-200 text-purple-900',
-      'orange': 'bg-orange-200 text-orange-900',
-      'red': 'bg-red-200 text-red-900',
-    };
-
-    const processHighlights = (content: string) => {
-      return content.replace(/\{(yellow|pink|blue|green|purple|orange|red):([^}]+)\}/g, (match, color, text) => {
-        const classes = highlightMap[color] || highlightMap['yellow'];
-        return `<mark class="px-1.5 py-0.5 rounded ${classes}">$2</mark>`.replace('$2', text);
-      });
-    };
-
-    const lines = text.split('\n');
-    const processedLines: string[] = [];
-    
-    for (let line of lines) {
-      let processed = line;
-      
-      // Horizontal rule (línea divisoria)
-      if (processed.trim() === '---' || processed.trim() === '***' || processed.trim() === '___') {
-        processed = '<hr class="my-2 border-t border-border" />';
-      }
-      // Headers
-      else if (processed.startsWith('### ')) {
-        processed = `<h3 class="text-lg font-semibold mb-2 mt-4">${processHighlights(processed.slice(4))}</h3>`;
-      } else if (processed.startsWith('## ')) {
-        processed = `<h2 class="text-xl font-semibold mb-2 mt-4">${processHighlights(processed.slice(3))}</h2>`;
-      } else if (processed.startsWith('# ')) {
-        processed = `<h1 class="text-2xl font-bold mb-3 mt-4">${processHighlights(processed.slice(2))}</h1>`;
-      }
-      // Checkboxes (marcado) - con o sin contenido
-      else if (processed.match(/^-\s*\[x\]\s*(.*)$/i)) {
-        const match = processed.match(/^-\s*\[x\]\s*(.*)$/i);
-        if (match) {
-          const content = match[1] || '';
-          // Procesar bold, italic y resaltados en el contenido
-          let formatted = content.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-          formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
-          formatted = processHighlights(formatted);
-          processed = `<div class="flex items-center gap-2 mb-0.5"><input type="checkbox" checked disabled class="rounded border-gray-400 w-4 h-4" /><span class="line-through text-muted-foreground">${formatted || '&nbsp;'}</span></div>`;
-        }
-      }
-      // Checkboxes (sin marcar) - con o sin contenido
-      else if (processed.match(/^-\s*\[\s*\]\s*(.*)$/)) {
-        const match = processed.match(/^-\s*\[\s*\]\s*(.*)$/);
-        if (match) {
-          const content = match[1] || '';
-          // Procesar bold, italic y resaltados en el contenido
-          let formatted = content.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-          formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
-          formatted = processHighlights(formatted);
-          processed = `<div class="flex items-center gap-2 mb-0.5"><input type="checkbox" disabled class="rounded border-gray-400 w-4 h-4" /><span>${formatted || '&nbsp;'}</span></div>`;
-        }
-      }
-      // Bullet lists
-      else if (processed.startsWith('- ')) {
-        let content = processed.slice(2);
-        // Procesar bold, italic y resaltados
-        content = content.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-        content = content.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
-        content = processHighlights(content);
-        processed = `<li class="ml-4 my-1">${content}</li>`;
-      }
-      else {
-        // Procesar bold, italic, resaltados en texto normal
-        processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-        processed = processed.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>');
-        processed = processHighlights(processed);
-        // Inline code
-        processed = processed.replace(/`([^`]+)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>');
-      }
-      
-      processedLines.push(processed);
-    }
-    
-    let html = processedLines.join('<br />');
-    
-    // Code blocks (después de unir líneas)
-    html = html.replace(/```([^`]+)```/g, '<pre class="bg-muted p-3 rounded-lg my-2 overflow-x-auto"><code>$1</code></pre>');
-    
-    // Agrupar <li> consecutivos en <ul>
-    html = html.replace(/(<li class="ml-4 my-1">.+?<\/li>(<br \/>)?)+/g, '<ul class="list-disc my-2 ml-2">$&</ul>');
-    
-    return html;
-  };
+  const renderPreview = renderMarkdownPreview;
 
   if (!open || !subGoal || !parentGoal) return null;
 
@@ -468,218 +484,126 @@ export default function FocusModal({ open, onOpenChange, subGoal, parentGoal, on
               </label>
               <button
                 type="button"
-                onClick={() => {
-                  setIsEditingNotes(prev => !prev);
-                  if (isEditingNotes) {
-                    setHeadingMenuOpen(false);
-                    setColorMenuOpen(false);
-                  }
-                }}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+                onClick={openEditor}
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors"
               >
-                {isEditingNotes ? 'Cerrar edición' : 'Editar'}
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
               </button>
             </div>
-            <div className="space-y-3">
-              {/* Preview (siempre visible primero) */}
-              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 min-h-[80px]">
-                <div className="text-xs font-semibold text-muted-foreground mb-2">Vista previa:</div>
-                {notes.trim() ? (
-                  <div 
-                    className="prose prose-sm max-w-none text-foreground"
-                    dangerouslySetInnerHTML={{ __html: renderPreview(notes) }}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aún no hay contenido para previsualizar.</p>
-                )}
-              </div>
 
-              {isEditingNotes && (
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  {/* Toolbar */}
-                  <div className="flex items-center gap-0.5 p-2 border-b border-border bg-muted/30">
+            {/* Preview (siempre visible) */}
+            <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 min-h-[80px]">
+              {notes.trim() ? (
+                <div
+                  className="prose prose-sm max-w-none text-foreground"
+                  dangerouslySetInnerHTML={{ __html: renderPreview(notes) }}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">Sin notas aún. Haz clic en "Editar" para agregar contenido.</p>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {notes.length}/10000 caracteres • Se guarda automáticamente
+            </p>
+          </div>
+
+          {/* Editor dialog (modal superpuesto) */}
+          {isEditingNotes && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => closeEditor(true)} />
+              <div className="relative w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col h-[88vh]">
+                {/* Dialog header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                  <span className="text-sm font-semibold text-foreground">Editar notas</span>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={toggleBold}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Negrita (Ctrl+B)"
+                      onClick={() => closeEditor(false)}
+                      className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
                     >
-                      <Bold className="h-4 w-4" />
+                      Cancelar
                     </button>
-                    
                     <button
-                      onClick={toggleItalic}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Cursiva (Ctrl+I)"
+                      onClick={() => closeEditor(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                     >
-                      <Italic className="h-4 w-4" />
-                    </button>
-
-                    <div className="h-6 w-px bg-border mx-1" />
-
-                    {/* Dropdown de encabezados */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
-                        className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1"
-                        title="Encabezados"
-                      >
-                        <Heading1 className="h-4 w-4" />
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      
-                      {headingMenuOpen && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setHeadingMenuOpen(false)}
-                          />
-                          <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-20 min-w-[140px]">
-                            <button
-                              onClick={() => insertHeading(1)}
-                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                            >
-                              <Heading1 className="h-4 w-4" />
-                              Título 1
-                            </button>
-                            <button
-                              onClick={() => insertHeading(2)}
-                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                            >
-                              <Heading2 className="h-4 w-4" />
-                              Título 2
-                            </button>
-                            <button
-                              onClick={() => insertHeading(3)}
-                              className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                            >
-                              <Heading3 className="h-4 w-4" />
-                              Título 3
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="h-6 w-px bg-border mx-1" />
-
-                    {/* Dropdown de colores de resaltado */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setColorMenuOpen(!colorMenuOpen)}
-                        className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1"
-                        title="Resaltar"
-                      >
-                        <span className="text-xs font-bold">🎨</span>
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      
-                      {colorMenuOpen && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setColorMenuOpen(false)}
-                          />
-                          <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-2 px-2 z-20 grid grid-cols-3 gap-2 w-max">
-                            <button
-                              onClick={() => insertHighlight('yellow')}
-                              className="w-6 h-6 rounded bg-yellow-200 hover:ring-2 ring-foreground transition-all"
-                              title="Amarillo"
-                            />
-                            <button
-                              onClick={() => insertHighlight('pink')}
-                              className="w-6 h-6 rounded bg-pink-200 hover:ring-2 ring-foreground transition-all"
-                              title="Rosa"
-                            />
-                            <button
-                              onClick={() => insertHighlight('blue')}
-                              className="w-6 h-6 rounded bg-blue-200 hover:ring-2 ring-foreground transition-all"
-                              title="Azul"
-                            />
-                            <button
-                              onClick={() => insertHighlight('green')}
-                              className="w-6 h-6 rounded bg-green-200 hover:ring-2 ring-foreground transition-all"
-                              title="Verde"
-                            />
-                            <button
-                              onClick={() => insertHighlight('purple')}
-                              className="w-6 h-6 rounded bg-purple-200 hover:ring-2 ring-foreground transition-all"
-                              title="Púrpura"
-                            />
-                            <button
-                              onClick={() => insertHighlight('orange')}
-                              className="w-6 h-6 rounded bg-orange-200 hover:ring-2 ring-foreground transition-all"
-                              title="Naranja"
-                            />
-                            <button
-                              onClick={() => insertHighlight('red')}
-                              className="w-6 h-6 rounded bg-red-200 hover:ring-2 ring-foreground transition-all"
-                              title="Rojo"
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="h-6 w-px bg-border mx-1" />
-
-                    <button
-                      onClick={insertCheckbox}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Checkbox"
-                    >
-                      <ListChecks className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      onClick={insertBulletList}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Lista con viñetas"
-                    >
-                      <List className="h-4 w-4" />
-                    </button>
-
-                    <div className="h-6 w-px bg-border mx-1" />
-
-                    <button
-                      onClick={insertCodeBlock}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Bloque de código"
-                    >
-                      <Code className="h-4 w-4" />
-                    </button>
-
-                    <div className="h-6 w-px bg-border mx-1" />
-
-                    <button
-                      onClick={insertDivider}
-                      className="p-2 rounded hover:bg-accent transition-colors"
-                      title="Línea divisoria"
-                    >
-                      <Minus className="h-4 w-4" />
+                      <Save className="h-3.5 w-3.5" />
+                      Guardar
                     </button>
                   </div>
-
-                  {/* Textarea */}
-                  <textarea
-                    ref={textareaRef}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Escribe tus notas, ideas o reflexiones durante esta sesión de focus..."
-                    className="w-full min-h-[120px] px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-y bg-transparent"
-                    maxLength={2000}
-                  />
                 </div>
-              )}
 
-              <p className="text-xs text-muted-foreground">
-                {notes.length}/2000 caracteres • Se guarda automáticamente
-              </p>
+                {/* Toolbar */}
+                <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-border bg-muted/30 shrink-0">
+                  <button onClick={toggleBold} className="p-2 rounded hover:bg-accent transition-colors" title="Negrita"><Bold className="h-4 w-4" /></button>
+                  <button onClick={toggleItalic} className="p-2 rounded hover:bg-accent transition-colors" title="Cursiva"><Italic className="h-4 w-4" /></button>
+                  <div className="h-6 w-px bg-border mx-1" />
+
+                  {/* Encabezados */}
+                  <div className="relative">
+                    <button onClick={() => setHeadingMenuOpen(!headingMenuOpen)} className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1" title="Encabezados">
+                      <Heading1 className="h-4 w-4" />
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {headingMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setHeadingMenuOpen(false)} />
+                        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-20 min-w-[140px]">
+                          <button onClick={() => insertHeading(1)} className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"><Heading1 className="h-4 w-4" />Título 1</button>
+                          <button onClick={() => insertHeading(2)} className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"><Heading2 className="h-4 w-4" />Título 2</button>
+                          <button onClick={() => insertHeading(3)} className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"><Heading3 className="h-4 w-4" />Título 3</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="h-6 w-px bg-border mx-1" />
+
+                  {/* Colores */}
+                  <div className="relative">
+                    <button onClick={() => setColorMenuOpen(!colorMenuOpen)} className="p-2 rounded hover:bg-accent transition-colors flex items-center gap-1" title="Resaltar">
+                      <span className="text-xs font-bold">🎨</span>
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {colorMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setColorMenuOpen(false)} />
+                        <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-lg shadow-lg py-2 px-2 z-20 grid grid-cols-3 gap-2 w-max">
+                          {(['yellow','pink','blue','green','purple','orange','red'] as const).map(c => (
+                            <button key={c} onClick={() => insertHighlight(c)} className={`w-6 h-6 rounded bg-${c}-200 hover:ring-2 ring-foreground transition-all`} title={c} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="h-6 w-px bg-border mx-1" />
+                  <button onClick={insertCheckbox} className="p-2 rounded hover:bg-accent transition-colors" title="Checkbox"><ListChecks className="h-4 w-4" /></button>
+                  <button onClick={insertChildCheckbox} className="p-2 rounded hover:bg-accent transition-colors" title="Checkbox hijo"><span className="text-xs font-semibold">↳</span></button>
+                  <button onClick={insertBulletList} className="p-2 rounded hover:bg-accent transition-colors" title="Lista"><List className="h-4 w-4" /></button>
+                  <div className="h-6 w-px bg-border mx-1" />
+                  <button onClick={insertCodeBlock} className="p-2 rounded hover:bg-accent transition-colors" title="Código"><Code className="h-4 w-4" /></button>
+                  <button onClick={insertDivider} className="p-2 rounded hover:bg-accent transition-colors" title="Divisor"><Minus className="h-4 w-4" /></button>
+                  <button onClick={insertToggle} className="p-2 rounded hover:bg-accent transition-colors" title="Desplegable"><ChevronRight className="h-4 w-4" /></button>
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  value={editDraft}
+                  onChange={e => setEditDraft(e.target.value)}
+                  onKeyDown={handleNotesKeyDown}
+                  placeholder="Escribe tus notas, ideas o reflexiones..."
+                  className="flex-1 min-h-0 w-full px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none bg-transparent overflow-y-auto"
+                  maxLength={10000}
+                  autoFocus
+                />
+                <div className="px-4 py-2 text-xs text-muted-foreground border-t border-border shrink-0">
+                  {editDraft.length}/10000 caracteres
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

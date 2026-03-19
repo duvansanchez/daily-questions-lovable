@@ -10,7 +10,7 @@ from app.schemas.schemas import (
     PhraseCreate, PhraseUpdate, PhraseResponse,
     PhrasesPaginatedResponse,
     PhraseSubcategoryCreate, PhraseSubcategoryUpdate, PhraseSubcategoryResponse,
-    ReviewPlanCreate, ReviewPlanResponse,
+    ReviewPlanCreate, ReviewPlanUpdate, ReviewPlanResponse,
 )
 from app.services.phrase_service import (
     PhraseCategoryService, PhraseSubcategoryService, PhraseService
@@ -95,10 +95,20 @@ def delete_subcategory(subcategory_id: str, db: Session = Depends(get_db)):
     return {"message": "Subcategory deleted"}
 
 
+def _category_to_dict(cat) -> dict:
+    return {
+        "id": str(cat.id),
+        "name": cat.nombre,
+        "description": cat.descripcion,
+        "active": cat.activa,
+        "created_at": cat.fecha_creacion.isoformat() if cat.fecha_creacion else None,
+    }
+
+
 @router.post("/categories", response_model=PhraseCategoryResponse)
 def create_category(category: PhraseCategoryCreate, db: Session = Depends(get_db)):
     """Crear categoría de frase."""
-    return PhraseCategoryService.create_category(db, category)
+    return _category_to_dict(PhraseCategoryService.create_category(db, category))
 
 
 @router.patch("/categories/{category_id}", response_model=PhraseCategoryResponse)
@@ -107,7 +117,7 @@ def update_category(category_id: str, category: PhraseCategoryUpdate, db: Sessio
     db_category = PhraseCategoryService.update_category(db, category_id, category)
     if not db_category:
         raise HTTPException(status_code=404, detail="Category not found")
-    return db_category
+    return _category_to_dict(db_category)
 
 
 @router.delete("/categories/{category_id}")
@@ -120,11 +130,19 @@ def delete_category(category_id: str, db: Session = Depends(get_db)):
 
 # ==================== REVIEW PLANS ====================
 
+_DEFAULT_PLAN_CONFIG = {"shuffle": False, "daily_limit": None, "excluded_phrase_ids": []}
+
+
 def _plan_to_dict(plan: ReviewPlan) -> dict:
+    try:
+        config = json.loads(plan.config) if plan.config else _DEFAULT_PLAN_CONFIG
+    except (ValueError, TypeError):
+        config = _DEFAULT_PLAN_CONFIG
     return {
         "id": plan.id,
         "name": plan.nombre,
         "targets": json.loads(plan.targets),
+        "config": config,
         "created_at": plan.fecha_creacion.isoformat() if plan.fecha_creacion else None,
     }
 
@@ -145,6 +163,18 @@ def create_review_plan(data: ReviewPlanCreate, db: Session = Depends(get_db)):
         fecha_creacion=datetime.now(),
     )
     db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return _plan_to_dict(plan)
+
+
+@router.patch("/review-plans/{plan_id}", response_model=ReviewPlanResponse)
+def update_review_plan(plan_id: int, data: ReviewPlanUpdate, db: Session = Depends(get_db)):
+    """Actualizar configuración de una planificación de repaso."""
+    plan = db.query(ReviewPlan).filter(ReviewPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Review plan not found")
+    plan.config = json.dumps(data.config.model_dump())
     db.commit()
     db.refresh(plan)
     return _plan_to_dict(plan)

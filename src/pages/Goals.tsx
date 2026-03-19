@@ -137,6 +137,7 @@ export default function Goals() {
   const [focusSubGoal, setFocusSubGoal] = useState<SubGoal | null>(null);
   const [focusParentGoal, setFocusParentGoal] = useState<Goal | null>(null);
   const [allGoalsMapped, setAllGoalsMapped] = useState<Goal[]>([]);
+  const [historicSubgoalsLoaded, setHistoricSubgoalsLoaded] = useState(false);
   const [hiddenGoalIds, setHiddenGoalIds] = useState<Set<string>>(() => {
     const today = new Date().toISOString().slice(0, 10);
     const raw = localStorage.getItem(`hidden_goals_${today}`);
@@ -173,6 +174,7 @@ export default function Goals() {
         // Mapear PRIMERO (para tener la categoría en inglés)
         const allMapped = allItems.map(mapBackendGoal);
         setAllGoalsMapped(allMapped);
+        setHistoricSubgoalsLoaded(false);
         
         console.log('📋 Categorías SIN filtro de fecha:', allMapped.reduce((acc, g) => {
           acc[g.category] = (acc[g.category] || 0) + 1;
@@ -233,6 +235,50 @@ export default function Goals() {
   useEffect(() => {
     loadGoals();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'historicos' || historicSubgoalsLoaded) return;
+
+    const currentGoalIds = new Set(goals.map(g => g.id));
+    const historicGoals = allGoalsMapped.filter(g => !currentGoalIds.has(g.id));
+    if (historicGoals.length === 0) return;
+
+    const loadHistoricSubgoals = async () => {
+      const updated = await Promise.all(
+        historicGoals.map(async (goal) => {
+          try {
+            const subgoalsData = await goalsAPI.getSubGoals(goal.id);
+            const mappedSubgoals = subgoalsData
+              .map((sub: any): SubGoal => ({
+                id: sub.id.toString(),
+                title: sub.titulo,
+                completed: sub.completado || false,
+                notes: sub.notas || undefined,
+                completedAt: sub.fecha_completado || undefined,
+                priority: undefined,
+                focusTimeSeconds: sub.tiempo_focus || 0,
+              }))
+              .sort((a: SubGoal, b: SubGoal) => {
+                const orderA = subgoalsData.find((s: any) => s.id.toString() === a.id)?.orden || 0;
+                const orderB = subgoalsData.find((s: any) => s.id.toString() === b.id)?.orden || 0;
+                return orderA - orderB;
+              });
+            return { ...goal, subGoals: mappedSubgoals };
+          } catch {
+            return goal;
+          }
+        })
+      );
+
+      setAllGoalsMapped(prev => {
+        const updatedMap = new Map(updated.map(g => [g.id, g]));
+        return prev.map(g => updatedMap.has(g.id) ? updatedMap.get(g.id)! : g);
+      });
+      setHistoricSubgoalsLoaded(true);
+    };
+
+    loadHistoricSubgoals();
+  }, [activeTab, historicSubgoalsLoaded]);
 
   // Escuchar Ctrl+Shift+A para crear nuevo objetivo
   useEffect(() => {
@@ -530,6 +576,16 @@ export default function Goals() {
     }
   };
 
+  const handleMakeCurrent = async (goalId: string) => {
+    try {
+      await goalsAPI.updateGoal(goalId, { recurrente: true });
+      setHistoricSubgoalsLoaded(false);
+      await loadGoals();
+    } catch (error) {
+      console.error('Error making goal current:', error);
+    }
+  };
+
   const handleFocusSubGoal = (goalId: string, subGoalId: string) => {
     const goal = goals.find(g => g.id === goalId);
     if (!goal) return;
@@ -701,7 +757,7 @@ export default function Goals() {
 
   const currentGoalIds = new Set(goals.map(g => g.id));
   const historicFiltered = allGoalsMapped
-    .filter(g => !currentGoalIds.has(g.id) && g.completed)
+    .filter(g => !currentGoalIds.has(g.id))
     .sort((a, b) =>
       new Date(b.completedAt || b.createdAt || 0).getTime() -
       new Date(a.completedAt || a.createdAt || 0).getTime()
@@ -709,7 +765,7 @@ export default function Goals() {
 
   const groupedHistoric = historicFiltered.reduce(
     (groups: Record<string, { label: string; goals: Goal[] }>, goal) => {
-      const date = new Date(goal.completedAt || goal.createdAt || Date.now());
+      const date = new Date(goal.createdAt || goal.completedAt || Date.now());
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const label = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
       if (!groups[key]) groups[key] = { label, goals: [] };
@@ -851,6 +907,7 @@ export default function Goals() {
                         onFocusGoal={handleOpenGoalFocus}
                         onDelete={handleDeleteGoal}
                         onToggleSubGoal={handleToggleSubGoal}
+                        onMakeCurrent={!goal.recurring ? handleMakeCurrent : undefined}
                       />
                     ))}
                   </div>

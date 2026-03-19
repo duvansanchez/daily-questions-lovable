@@ -229,6 +229,7 @@ class PhraseService:
             subcategoria_id=phrase.subcategory_id,
             notas=phrase.notes,
             activa=phrase.active,
+            fecha_creacion=datetime.now(),
         )
         db.add(db_phrase)
         db.commit()

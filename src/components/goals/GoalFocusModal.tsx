@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, Focus, Pause, Play, RotateCcw, X, GripVertical } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { CheckCircle2, ChevronRight, Eye, EyeOff, Focus, Pause, Play, RotateCcw, X, GripVertical } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import type { SubGoal, Goal } from '@/types';
+import { renderMarkdownPreview } from '@/utils/markdownPreview';
 
 interface GoalFocusModalProps {
   open: boolean;
@@ -27,6 +29,9 @@ export default function GoalFocusModal({
   const [notes, setNotes] = useState('');
   const [subGoals, setSubGoals] = useState<SubGoal[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [expandedSubgoals, setExpandedSubgoals] = useState<Set<string>>(new Set());
+  const [hiddenSubGoalIds, setHiddenSubGoalIds] = useState<Set<string>>(new Set());
+  const [showHiddenSubGoals, setShowHiddenSubGoals] = useState(false);
   
   const intervalRef = useRef<number | null>(null);
   const prevOpenRef = useRef(open);
@@ -42,6 +47,11 @@ export default function GoalFocusModal({
       setSubGoals([...nonCompleted, ...completed]);
       setTimerState('idle');
       setHasUnsavedChanges(false);
+      setShowHiddenSubGoals(false);
+      // Cargar subobjetivos ocultos del día desde localStorage
+      const today = new Date().toISOString().slice(0, 10);
+      const raw = localStorage.getItem(`hidden_subgoals_${goal.id}_${today}`);
+      setHiddenSubGoalIds(new Set(raw ? JSON.parse(raw) : []));
     }
   }, [open, goal]);
 
@@ -148,6 +158,18 @@ export default function GoalFocusModal({
     setHasUnsavedChanges(true);
   };
 
+  const handleHideSubGoal = (subGoalId: string) => {
+    if (!goal) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setHiddenSubGoalIds(prev => {
+      const next = new Set(prev);
+      if (next.has(subGoalId)) next.delete(subGoalId);
+      else next.add(subGoalId);
+      localStorage.setItem(`hidden_subgoals_${goal.id}_${today}`, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -179,6 +201,9 @@ export default function GoalFocusModal({
 
   const completedCount = subGoals.filter(s => s.completed).length;
   const totalCount = subGoals.length;
+  const visibleSubGoals = showHiddenSubGoals
+    ? subGoals
+    : subGoals.filter(s => !hiddenSubGoalIds.has(s.id));
 
   return (
     <div className="fixed inset-0 z-50 bg-background animate-fade-in overflow-y-auto">
@@ -289,6 +314,20 @@ export default function GoalFocusModal({
                 {completedCount}/{totalCount}
               </span>
             </div>
+            {hiddenSubGoalIds.size > 0 && (
+              <button
+                onClick={() => setShowHiddenSubGoals(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  showHiddenSubGoals
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+                title={showHiddenSubGoals ? 'Ocultar los ocultos' : `Mostrar ${hiddenSubGoalIds.size} oculto${hiddenSubGoalIds.size > 1 ? 's' : ''}`}
+              >
+                {showHiddenSubGoals ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                {hiddenSubGoalIds.size}
+              </button>
+            )}
           </div>
 
           {/* Progress bar */}
@@ -312,70 +351,121 @@ export default function GoalFocusModal({
                   {...provided.droppableProps}
                   ref={provided.innerRef}
                 >
-                  {subGoals.map((sub, index) => {
+                  {visibleSubGoals.map((sub, index) => {
                     const checklistCounts = getChecklistCounts(sub.notes);
+                    const isExpanded = expandedSubgoals.has(sub.id);
+                    const hasNotes = !!sub.notes?.trim();
+                    const isHidden = hiddenSubGoalIds.has(sub.id);
                     return (
                       <Draggable key={sub.id} draggableId={String(sub.id)} index={index}>
-                        {(provided, snapshot) => (
+                        {(provided, snapshot) => {
+                          const card = (
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            className={`rounded-xl border transition-all ${
                               snapshot.isDragging
                                 ? 'bg-primary/20 border-primary shadow-lg shadow-primary/20'
-                                : 'border-border bg-card hover:border-primary/30'
+                                : isHidden
+                                  ? 'border-dashed border-border bg-card opacity-40'
+                                  : 'border-border bg-card hover:border-primary/30'
                             }`}
                           >
-                            <div
-                              {...provided.dragHandleProps}
-                              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors cursor-grab active:cursor-grabbing"
-                              title="Arrastra para reordenar"
-                            >
-                              <GripVertical className="h-4 w-4" />
-                            </div>
-                            
-                            <button
-                              onClick={() => toggleSubGoal(sub.id)}
-                              className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                sub.completed
-                                  ? 'bg-primary border-primary'
-                                  : 'border-input hover:border-primary'
-                              }`}
-                            >
-                              {sub.completed && (
-                                <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </button>
-                            
-                            <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                              {sub.title}
-                            </span>
-                            
-                            {sub.focusTimeSeconds && sub.focusTimeSeconds > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                {Math.floor(sub.focusTimeSeconds / 60)}m
-                              </span>
-                            )}
-                            
-                            {checklistCounts && (
-                              <span className="text-xs text-muted-foreground">
-                                Checklist {checklistCounts.completed}/{checklistCounts.total}
-                              </span>
-                            )}
-                            
-                            {!sub.completed && (
-                              <button
-                                onClick={() => onOpenSubGoalFocus(sub.id)}
-                                className="rounded-lg bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors flex items-center gap-1"
+                            {/* Fila principal */}
+                            <div className="flex items-center gap-3 p-3">
+                              <div
+                                {...provided.dragHandleProps}
+                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors cursor-grab active:cursor-grabbing"
+                                title="Arrastra para reordenar"
                               >
-                                <Focus className="h-3.5 w-3.5" />
-                                Focus
+                                <GripVertical className="h-4 w-4" />
+                              </div>
+
+                              {/* Toggle Notion */}
+                              <button
+                                onClick={() => setExpandedSubgoals(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(sub.id)) next.delete(sub.id);
+                                  else next.add(sub.id);
+                                  return next;
+                                })}
+                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                                title={isExpanded ? 'Colapsar' : 'Expandir'}
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                               </button>
+
+                              <button
+                                onClick={() => toggleSubGoal(sub.id)}
+                                className={`h-5 w-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                  sub.completed
+                                    ? 'bg-primary border-primary'
+                                    : 'border-input hover:border-primary'
+                                }`}
+                              >
+                                {sub.completed && (
+                                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+
+                              <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                {sub.title}
+                              </span>
+
+                              {sub.focusTimeSeconds && sub.focusTimeSeconds > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {Math.floor(sub.focusTimeSeconds / 60)}m
+                                </span>
+                              )}
+
+                              {checklistCounts && (
+                                <span className="text-xs text-muted-foreground">
+                                  {checklistCounts.completed}/{checklistCounts.total}
+                                </span>
+                              )}
+
+                              <button
+                                onClick={() => handleHideSubGoal(sub.id)}
+                                className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:bg-accent transition-colors"
+                                title={isHidden ? 'Mostrar hoy' : 'Ocultar hoy'}
+                              >
+                                {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                              </button>
+
+                              {!sub.completed && !isHidden && (
+                                <button
+                                  onClick={() => onOpenSubGoalFocus(sub.id)}
+                                  className="rounded-lg bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-xs font-medium text-primary transition-colors flex items-center gap-1"
+                                >
+                                  <Focus className="h-3.5 w-3.5" />
+                                  Focus
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Contenido expandible */}
+                            {isExpanded && (
+                              <div className="px-4 pb-3 border-t border-border/50 pt-3 ml-10">
+                                {hasNotes ? (
+                                  <div
+                                    className="prose prose-sm max-w-none text-foreground text-sm"
+                                    dangerouslySetInnerHTML={{ __html: renderMarkdownPreview(sub.notes!) }}
+                                  />
+                                ) : (
+                                  <p className="text-xs text-muted-foreground italic">
+                                    Sin notas. Usa el botón Focus para agregar contenido a este subobjetivo.
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
+                          );
+                          return snapshot.isDragging
+                            ? createPortal(card, document.body)
+                            : card;
+                        }}
                       </Draggable>
                     );
                   })}
@@ -402,7 +492,7 @@ export default function GoalFocusModal({
             onChange={e => setNotes(e.target.value)}
             placeholder="Anota tu progreso, ideas o reflexiones sobre este objetivo..."
             className="w-full min-h-[150px] rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-y"
-            maxLength={2000}
+            maxLength={10000}
           />
         </div>
       </div>

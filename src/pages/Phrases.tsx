@@ -1,20 +1,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Dices, Eye, Filter, Plus, RefreshCw, Settings } from 'lucide-react';
+import { BookOpen, Dices, Eye, Filter, Plus, RefreshCw, Settings, Settings2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import PhraseCard from '@/components/phrases/PhraseCard';
 import PhraseModal from '@/components/phrases/PhraseModal';
 import ReviewModal from '@/components/phrases/ReviewModal';
 import RandomPhraseModal from '@/components/phrases/RandomPhraseModal';
 import { phrasesAPI, reviewPlansAPI } from '@/services/api';
+import type { ReviewPlanConfig } from '@/services/api';
 import type { Phrase, PhraseCategory } from '@/types';
 import { mockPhraseCategories } from '@/data/mockData';
+import PlanConfigModal from '@/components/phrases/PlanConfigModal';
 
 interface ReviewPlan {
   id: number;
   name: string;
   targets: string[];
+  config: ReviewPlanConfig;
 }
+
+const DEFAULT_PLAN_CONFIG: ReviewPlanConfig = {
+  shuffle: false,
+  daily_limit: null,
+  excluded_phrase_ids: [],
+};
 
 const PHRASES_PAGE_SIZE = 60;
 
@@ -68,6 +77,7 @@ export default function Phrases() {
   const [reviewPhrases, setReviewPhrases] = useState<Phrase[]>([]);
   const [reviewSessionLabel, setReviewSessionLabel] = useState('Todas');
   const [reviewPlans, setReviewPlans] = useState<ReviewPlan[]>([]);
+  const [configuringPlan, setConfiguringPlan] = useState<ReviewPlan | null>(null);
   const [planName, setPlanName] = useState('');
   const [targetToAdd, setTargetToAdd] = useState('');
   const [selectedPlanTargets, setSelectedPlanTargets] = useState<string[]>([]);
@@ -143,7 +153,7 @@ export default function Phrases() {
 
   useEffect(() => {
     reviewPlansAPI.getPlans()
-      .then(setReviewPlans)
+      .then(plans => setReviewPlans(plans.map(p => ({ ...p, config: p.config ?? DEFAULT_PLAN_CONFIG }))))
       .catch(error => console.error('Error loading review plans:', error));
   }, []);
 
@@ -293,14 +303,42 @@ export default function Phrases() {
   };
 
   const handleStartStudyReview = async (plan: ReviewPlan) => {
-    const selected = await fetchAllActiveForTargets(plan.targets);
+    let selected = await fetchAllActiveForTargets(plan.targets);
 
     if (selected.length === 0) {
       alert('Esta planificación no tiene frases activas para repasar.');
       return;
     }
 
+    const cfg = plan.config ?? DEFAULT_PLAN_CONFIG;
+
+    // Aplicar exclusiones de la config del plan
+    if (cfg.excluded_phrase_ids.length > 0) {
+      const excluded = new Set(cfg.excluded_phrase_ids.map(String));
+      selected = selected.filter(p => !excluded.has(p.id));
+    }
+
+    // Aplicar orden aleatorio
+    if (cfg.shuffle) {
+      selected = [...selected].sort(() => Math.random() - 0.5);
+    }
+
+    // Aplicar límite por sesión
+    if (cfg.daily_limit && cfg.daily_limit > 0) {
+      selected = selected.slice(0, cfg.daily_limit);
+    }
+
+    if (selected.length === 0) {
+      alert('Todas las frases de esta planificación están desactivadas en la config.');
+      return;
+    }
+
     openReviewSession(selected, `Planificación: ${plan.name}`);
+  };
+
+  const handleSavePlanConfig = async (planId: number, config: ReviewPlanConfig) => {
+    const updated = await reviewPlansAPI.updatePlan(planId, config);
+    setReviewPlans(prev => prev.map(p => p.id === planId ? { ...p, config: updated.config } : p));
   };
 
   const handleCreateReviewPlan = async () => {
@@ -319,7 +357,7 @@ export default function Phrases() {
         name: planName.trim(),
         targets: selectedPlanTargets,
       });
-      setReviewPlans(prev => [newPlan, ...prev]);
+      setReviewPlans(prev => [{ ...newPlan, config: newPlan.config ?? DEFAULT_PLAN_CONFIG }, ...prev]);
       setPlanName('');
       setSelectedPlanTargets([]);
       setTargetToAdd('');
@@ -428,34 +466,48 @@ export default function Phrases() {
     }
   };
 
-  const handleSavePhrase = (formData: any) => {
+  const handleSavePhrase = async (formData: any) => {
     if (editingPhrase) {
-      // Editar frase existente
-      setPhrases(prev => prev.map(p =>
-        p.id === editingPhrase.id
-          ? { ...p, ...formData }
-          : p
-      ));
+      setPhrases(prev => prev.map(p => p.id === editingPhrase.id ? { ...p, ...formData } : p));
+      try {
+        await phrasesAPI.updatePhrase(editingPhrase.id, {
+          text: formData.text,
+          author: formData.author || null,
+          category_id: formData.categoryId || null,
+          subcategory_id: formData.subcategoryId || null,
+          notes: formData.notes || null,
+          active: formData.active,
+        });
+      } catch (error) {
+        console.error('Error updating phrase:', error);
+      }
     } else {
-      // Crear nueva frase
-      const newPhrase: Phrase = {
-        id: `phrase-${Date.now()}`,
-        ...formData,
-        reviewCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      setPhrases(prev => [...prev, newPhrase]);
+      try {
+        const created = await phrasesAPI.createPhrase({
+          text: formData.text,
+          author: formData.author || null,
+          category_id: formData.categoryId || null,
+          subcategory_id: formData.subcategoryId || null,
+          notes: formData.notes || null,
+          active: formData.active,
+        });
+        setPhrases(prev => [mapBackendPhrase(created), ...prev]);
+        await fetchPhraseCounts();
+      } catch (error) {
+        console.error('Error creating phrase:', error);
+      }
     }
   };
 
   const handleEditFromReview = async (id: string, formData: any) => {
     setPhrases(prev => prev.map(p => p.id === id ? { ...p, ...formData } : p));
+    setReviewPhrases(prev => prev.map(p => p.id === id ? { ...p, ...formData } : p));
     try {
       await phrasesAPI.updatePhrase(id, {
         text: formData.text,
         author: formData.author || null,
-        category_id: formData.categoryId ? parseInt(formData.categoryId) : null,
-        subcategory_id: formData.subcategoryId ? parseInt(formData.subcategoryId) : null,
+        category_id: formData.categoryId || null,
+        subcategory_id: formData.subcategoryId || null,
         notes: formData.notes || null,
       });
     } catch (error) {
@@ -652,6 +704,13 @@ export default function Phrases() {
                     Repasar
                   </button>
                   <button
+                    onClick={() => setConfiguringPlan(plan)}
+                    title="Configuración del plan"
+                    className="rounded-lg border border-border bg-background p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => handleDeleteReviewPlan(Number(plan.id))}
                     className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
                   >
@@ -706,6 +765,8 @@ export default function Phrases() {
         phrase={editingPhrase}
         categories={categories}
         onSave={handleSavePhrase}
+        initialCategoryId={selectedCategory !== 'all' ? selectedCategory : undefined}
+        initialSubcategoryId={selectedSubcategory !== 'all' ? selectedSubcategory : undefined}
       />
 
       {/* Review Modal */}
@@ -727,6 +788,17 @@ export default function Phrases() {
         categories={categories}
         onNewRandom={handleNewRandomPhrase}
       />
+
+      {/* Plan Config Modal */}
+      {configuringPlan && (
+        <PlanConfigModal
+          open={!!configuringPlan}
+          onOpenChange={open => { if (!open) setConfiguringPlan(null); }}
+          plan={configuringPlan}
+          categories={categories}
+          onSave={handleSavePlanConfig}
+        />
+      )}
     </div>
   );
 }

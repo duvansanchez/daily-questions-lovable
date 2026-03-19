@@ -3,7 +3,7 @@ import { X, Target, CalendarDays, Bell, ChevronDown, ChevronUp } from 'lucide-re
 import { goalsAPI } from '@/services/api';
 import { shouldShowNotification, markNotificationShown, getGreeting } from './notificationState';
 
-type GoalItem = { titulo: string; categoria: string; completado: boolean };
+type GoalItem = { titulo: string; categoria: string; completado: boolean; fecha_inicio?: string | null; fecha_fin?: string | null };
 
 const PREVIEW = 3;
 const AUTO_DISMISS_MS = 20000;
@@ -34,8 +34,25 @@ export default function WelcomeModal() {
     try {
       const goalsRes = await goalsAPI.getGoals(1, 100);
       const goals: GoalItem[] = goalsRes.items;
-      const weekly = goals.filter(g => normalizeCategory(g.categoria) === 'weekly' && !g.completado);
-      const monthly = goals.filter(g => normalizeCategory(g.categoria) === 'monthly' && !g.completado);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const isVigente = (g: GoalItem) => {
+        if (g.fecha_inicio) {
+          const inicio = new Date(g.fecha_inicio);
+          inicio.setHours(0, 0, 0, 0);
+          if (inicio > today) return false;
+        }
+        if (g.fecha_fin) {
+          const fin = new Date(g.fecha_fin);
+          fin.setHours(23, 59, 59, 999);
+          if (fin < today) return false;
+        }
+        return true;
+      };
+
+      const weekly = goals.filter(g => normalizeCategory(g.categoria) === 'weekly' && !g.completado && isVigente(g));
+      const monthly = goals.filter(g => normalizeCategory(g.categoria) === 'monthly' && !g.completado && isVigente(g));
 
       setWeeklyGoals(weekly);
       setMonthlyGoals(monthly);
@@ -67,82 +84,92 @@ export default function WelcomeModal() {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-[200] w-80 bg-card border border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
-        exiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
+      className={`fixed inset-0 z-[200] flex items-center justify-center transition-opacity duration-300 ${
+        exiting ? 'opacity-0' : 'opacity-100'
       }`}
-      style={{ animation: exiting ? undefined : 'slideInRight 0.35s ease-out' }}
+      style={{ animation: exiting ? undefined : 'fadeIn 0.3s ease-out' }}
     >
       <style>{`
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(100%); }
-          to   { opacity: 1; transform: translateX(0); }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
-      `}</style>
-
-      {/* Barra de progreso auto-cierre */}
-      <div className="h-1 bg-muted overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-amber-400 to-primary"
-          style={{ animation: `shrink ${AUTO_DISMISS_MS}ms linear forwards` }}
-        />
-      </div>
-      <style>{`
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to   { opacity: 1; transform: scale(1); }
+        }
         @keyframes shrink {
           from { width: 100%; }
           to   { width: 0%; }
         }
       `}</style>
 
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={dismiss} />
+
+      {/* Modal */}
+      <div
+        className="relative w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
+        style={{ animation: exiting ? undefined : 'scaleIn 0.3s ease-out' }}
+      >
+        {/* Barra de progreso auto-cierre */}
+        <div className="h-1 bg-muted overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-amber-400 to-primary"
+            style={{ animation: `shrink ${AUTO_DISMISS_MS}ms linear forwards` }}
+          />
+        </div>
+
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 flex-shrink-0">
-          <Bell className="h-4 w-4 text-primary" />
+      <div className="flex items-center gap-3 px-6 pt-5 pb-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
+          <Bell className="h-5 w-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground leading-tight">{getGreeting()}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-semibold text-foreground leading-tight">{getGreeting()}</p>
+          <p className="text-sm text-muted-foreground">
             Tienes <span className="font-semibold text-primary">{total}</span> objetivo{total !== 1 ? 's' : ''} pendiente{total !== 1 ? 's' : ''}
           </p>
         </div>
         <button
           onClick={dismiss}
-          className="p-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0"
+          className="p-1.5 rounded-lg hover:bg-muted transition-colors flex-shrink-0"
         >
-          <X className="h-4 w-4 text-muted-foreground" />
+          <X className="h-5 w-5 text-muted-foreground" />
         </button>
       </div>
 
       {/* Lista de objetivos */}
-      <div className="px-4 pb-4 space-y-2">
+      <div className="px-6 pb-6 space-y-3">
         {weeklyGoals.length > 0 && (
-          <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Target className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+          <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-amber-500" />
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
                   Semanales · {weeklyGoals.length}
                 </span>
               </div>
               {weeklyGoals.length > PREVIEW && (
                 <button
                   onClick={() => setExpandedWeekly(v => !v)}
-                  className="flex items-center gap-0.5 text-[11px] text-amber-600 dark:text-amber-400 hover:underline"
+                  className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 hover:underline"
                 >
                   {expandedWeekly ? (
-                    <><ChevronUp className="h-3 w-3" /> Ver menos</>
+                    <><ChevronUp className="h-3.5 w-3.5" /> Ver menos</>
                   ) : (
-                    <><ChevronDown className="h-3 w-3" /> Ver más</>
+                    <><ChevronDown className="h-3.5 w-3.5" /> Ver más</>
                   )}
                 </button>
               )}
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {(expandedWeekly ? weeklyGoals : weeklyGoals.slice(0, PREVIEW)).map((g, i) => (
-                <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
+                <li key={i} className="text-sm text-foreground">• {g.titulo}</li>
               ))}
               {!expandedWeekly && weeklyGoals.length > PREVIEW && (
                 <li
-                  className="text-xs text-amber-600 dark:text-amber-400 cursor-pointer hover:underline"
+                  className="text-sm text-amber-600 dark:text-amber-400 cursor-pointer hover:underline"
                   onClick={() => setExpandedWeekly(true)}
                 >
                   +{weeklyGoals.length - PREVIEW} más — Ver todos
@@ -153,34 +180,34 @@ export default function WelcomeModal() {
         )}
 
         {monthlyGoals.length > 0 && (
-          <div className="bg-indigo-500/8 border border-indigo-500/20 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
-                <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
+          <div className="bg-indigo-500/8 border border-indigo-500/20 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-indigo-500" />
+                <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
                   Mensuales · {monthlyGoals.length}
                 </span>
               </div>
               {monthlyGoals.length > PREVIEW && (
                 <button
                   onClick={() => setExpandedMonthly(v => !v)}
-                  className="flex items-center gap-0.5 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                  className="flex items-center gap-0.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
                   {expandedMonthly ? (
-                    <><ChevronUp className="h-3 w-3" /> Ver menos</>
+                    <><ChevronUp className="h-3.5 w-3.5" /> Ver menos</>
                   ) : (
-                    <><ChevronDown className="h-3 w-3" /> Ver más</>
+                    <><ChevronDown className="h-3.5 w-3.5" /> Ver más</>
                   )}
                 </button>
               )}
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {(expandedMonthly ? monthlyGoals : monthlyGoals.slice(0, PREVIEW)).map((g, i) => (
-                <li key={i} className="text-xs text-foreground truncate">• {g.titulo}</li>
+                <li key={i} className="text-sm text-foreground">• {g.titulo}</li>
               ))}
               {!expandedMonthly && monthlyGoals.length > PREVIEW && (
                 <li
-                  className="text-xs text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline"
+                  className="text-sm text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline"
                   onClick={() => setExpandedMonthly(true)}
                 >
                   +{monthlyGoals.length - PREVIEW} más — Ver todos
@@ -192,10 +219,11 @@ export default function WelcomeModal() {
 
         <button
           onClick={dismiss}
-          className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+          className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           Vamos a ello
         </button>
+      </div>
       </div>
     </div>
   );

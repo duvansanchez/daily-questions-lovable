@@ -310,10 +310,22 @@ class DailySessionResponse(BaseModel):
 
 # ==================== REVIEW PLANS ====================
 
+class ReviewPlanConfig(BaseModel):
+    """Configuración de una planificación de repaso."""
+    shuffle: bool = False
+    daily_limit: Optional[int] = None
+    excluded_phrase_ids: List[int] = []
+
+
 class ReviewPlanCreate(BaseModel):
     """Crear planificación de repaso."""
     name: str = Field(..., min_length=1, max_length=255)
     targets: List[str]
+
+
+class ReviewPlanUpdate(BaseModel):
+    """Actualizar configuración de una planificación de repaso."""
+    config: ReviewPlanConfig
 
 
 class ReviewPlanResponse(BaseModel):
@@ -321,6 +333,7 @@ class ReviewPlanResponse(BaseModel):
     id: int
     name: str
     targets: List[str]
+    config: ReviewPlanConfig = ReviewPlanConfig()
     created_at: Optional[str] = None
 
     class Config:

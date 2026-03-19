@@ -27,9 +27,11 @@ interface PhraseModalProps {
   phrase?: Phrase | null;
   categories: PhraseCategory[];
   onSave: (data: PhraseFormData) => void;
+  initialCategoryId?: string;
+  initialSubcategoryId?: string;
 }
 
-export default function PhraseModal({ open, onOpenChange, phrase, categories, onSave }: PhraseModalProps) {
+export default function PhraseModal({ open, onOpenChange, phrase, categories, onSave, initialCategoryId, initialSubcategoryId }: PhraseModalProps) {
   const isEditing = !!phrase;
   const [form, setForm] = useState<PhraseFormData>(defaultForm);
 
@@ -44,9 +46,13 @@ export default function PhraseModal({ open, onOpenChange, phrase, categories, on
         active: phrase.active,
       });
     } else {
-      setForm(defaultForm);
+      setForm({
+        ...defaultForm,
+        categoryId: initialCategoryId || '',
+        subcategoryId: initialSubcategoryId || '',
+      });
     }
-  }, [phrase, open]);
+  }, [phrase, open, initialCategoryId, initialSubcategoryId]);
 
   const update = <K extends keyof PhraseFormData>(key: K, value: PhraseFormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));

@@ -32,9 +32,25 @@ try:
 
     # Importar modelos para que se registren en Base.metadata antes de create_all
     import app.models.models  # noqa: F401
-    from app.db.database import init_db
+    from app.db.database import init_db, get_engine
     init_db()
     print("✅ Tablas de BD verificadas/creadas", flush=True)
+
+    # Migración: agregar columna config a review_plans si no existe
+    try:
+        from sqlalchemy import text
+        with get_engine().connect() as conn:
+            conn.execute(text("""
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'review_plans') AND name = N'config'
+                )
+                ALTER TABLE review_plans ADD config NVARCHAR(MAX) NULL
+            """))
+            conn.commit()
+        print("✅ Migración review_plans.config verificada", flush=True)
+    except Exception as mig_err:
+        print(f"⚠️  Migración review_plans.config omitida: {mig_err}", flush=True)
 
 except Exception as e:
     print(f"❌ Error en importaciones: {e}", flush=True)

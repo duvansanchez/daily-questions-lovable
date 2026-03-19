@@ -117,10 +117,11 @@ export default function PhrasesCategories() {
           description: formData.description || null,
           active: formData.active,
         });
-        await loadCategories();
       }
     } catch (error) {
       console.error('Error saving category:', error);
+    } finally {
+      if (!editingCategory) await loadCategories();
     }
   };
 

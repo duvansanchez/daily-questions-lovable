@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Clock, Edit2, EyeOff, Eye, Focus, Repeat, Trash2 } from 'lucide-react';
+import { ArrowUpCircle, Check, ChevronDown, ChevronUp, Clock, Edit2, EyeOff, Eye, Focus, Repeat, Trash2 } from 'lucide-react';
 import type { Goal } from '@/types';
 import { useState } from 'react';
 
@@ -31,9 +31,10 @@ interface GoalCardProps {
   onDelete?: (id: string) => void;
   onToggleSubGoal?: (subGoalId: string) => void;
   onHide?: (id: string) => void;
+  onMakeCurrent?: (id: string) => void;
 }
 
-export default function GoalCard({ goal, isHidden, onToggle, onEdit, onFocusGoal, onDelete, onToggleSubGoal, onHide }: GoalCardProps) {
+export default function GoalCard({ goal, isHidden, onToggle, onEdit, onFocusGoal, onDelete, onToggleSubGoal, onHide, onMakeCurrent }: GoalCardProps) {
   const [expanded, setExpanded] = useState(true);
   const completedSubs = goal.subGoals.filter(s => s.completed).length;
 
@@ -113,6 +114,17 @@ export default function GoalCard({ goal, isHidden, onToggle, onEdit, onFocusGoal
               </span>
             )}
           </div>
+
+          {/* Pasar a objetivo actual */}
+          {onMakeCurrent && (
+            <button
+              onClick={() => onMakeCurrent(goal.id)}
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+            >
+              <ArrowUpCircle className="h-3.5 w-3.5" />
+              Pasar a objetivo actual
+            </button>
+          )}
 
           {/* SubGoals */}
           {goal.subGoals.length > 0 && (

@@ -91,6 +91,7 @@ Hay dos `.env` separados, **no se pisan**:
   de UI (ej: "cuadrito de al lado" → sidebar, "cajita de arriba" → navbar,
   "el popup" → modal/dialog), corregirle el término correcto antes de
   proceder con la tarea.
+- Ningun commit puede llevar que fue co autorizado por Claude, ninguno.
 
 ## Git
 

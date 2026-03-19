@@ -220,4 +220,5 @@ class ReviewPlan(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     nombre = Column(String(255), nullable=False)
     targets = Column(Text, nullable=False)  # JSON array de strings
+    config = Column(Text, nullable=True)    # JSON: { shuffle, daily_limit, excluded_phrase_ids }
     fecha_creacion = Column(DateTime, nullable=True)

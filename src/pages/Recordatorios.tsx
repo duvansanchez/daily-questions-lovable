@@ -3,6 +3,8 @@ import { Bell, BellOff, CalendarDays, ChevronLeft, ChevronRight, Mail, Moon, Pen
 import { remindersAPI } from '@/services/api';
 import type { CustomReminder, ReminderConfig } from '@/services/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -101,6 +103,109 @@ function occursOnDate(reminder: CustomReminder, date: Date) {
   if (reminder.recurrence === 'weekly') return current.getDay() === base.getDay();
   if (reminder.recurrence === 'monthly') return current.getDate() === base.getDate();
   return current.getDate() === base.getDate() && current.getMonth() === base.getMonth();
+}
+
+function formatDateLabel(isoDate: string) {
+  if (!isoDate) return 'Seleccionar fecha';
+  const date = new Date(`${isoDate}T12:00:00`);
+  return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function DatePickerField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const selectedDate = value ? new Date(`${value}T12:00:00`) : undefined;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors"
+        >
+          <span className="inline-flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            {formatDateLabel(value)}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto border-border bg-card p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={(date) => {
+            if (!date) return;
+            onChange(toIsoDateLocal(date));
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TimePickerField({ hour, minute, onChange }: { hour: number; minute: number; onChange: (value: { hour: number; minute: number }) => void }) {
+  const hourOptions = Array.from({ length: 24 }, (_, index) => index);
+  const minuteOptions = Array.from({ length: 12 }, (_, index) => index * 5);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors"
+        >
+          <span className="inline-flex items-center gap-2">
+            <span className="rounded-md bg-muted px-2 py-1 font-semibold tabular-nums tracking-wide">
+              {pad(hour)}:{pad(minute)}
+            </span>
+            <span className="text-xs text-muted-foreground">Hora de envío</span>
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[260px] border-border bg-card p-3" align="start">
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Selecciona la hora</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Hora</p>
+              <div className="grid max-h-48 grid-cols-3 gap-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
+                {hourOptions.map(option => {
+                  const selected = option === hour;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onChange({ hour: option, minute })}
+                      className={`rounded-md px-2 py-2 text-xs font-semibold tabular-nums transition-colors ${selected ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'}`}
+                    >
+                      {pad(option)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Minutos</p>
+              <div className="grid max-h-48 grid-cols-2 gap-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
+                {minuteOptions.map(option => {
+                  const selected = option === minute;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onChange({ hour, minute: option })}
+                      className={`rounded-md px-2 py-2 text-xs font-semibold tabular-nums transition-colors ${selected ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'}`}
+                    >
+                      {pad(option)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 interface FixedReminderCardProps {
@@ -718,11 +823,9 @@ export default function Recordatorios() {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Fecha de inicio</label>
-              <input
-                type="date"
+              <DatePickerField
                 value={form.date}
-                onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                onChange={(value) => setForm(prev => ({ ...prev, date: value }))}
               />
               <p className="mt-1.5 text-[11px] text-muted-foreground">
                 {recurrenceHelpText(form.recurrence)}
@@ -730,14 +833,10 @@ export default function Recordatorios() {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Hora</label>
-              <input
-                type="time"
-                value={toTimeString(form.hour, form.minute)}
-                onChange={e => {
-                  const { hour, minute } = fromTimeString(e.target.value);
-                  setForm(prev => ({ ...prev, hour, minute }));
-                }}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              <TimePickerField
+                hour={form.hour}
+                minute={form.minute}
+                onChange={({ hour, minute }) => setForm(prev => ({ ...prev, hour, minute }))}
               />
             </div>
             <div>
@@ -862,18 +961,18 @@ export default function Recordatorios() {
           <div className="space-y-3">
             {form.times.map((time, index) => (
               <div key={`${time.hour}-${time.minute}-${index}`} className="flex items-center gap-3">
-                <input
-                  type="time"
-                  value={toTimeString(time.hour, time.minute)}
-                  onChange={e => {
-                    const { hour, minute } = fromTimeString(e.target.value);
-                    setForm(prev => ({
-                      ...prev,
-                      times: prev.times.map((item, itemIndex) => itemIndex === index ? { hour, minute } : item),
-                    }));
-                  }}
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+                <div className="flex-1">
+                  <TimePickerField
+                    hour={time.hour}
+                    minute={time.minute}
+                    onChange={({ hour, minute }) => {
+                      setForm(prev => ({
+                        ...prev,
+                        times: prev.times.map((item, itemIndex) => itemIndex === index ? { hour, minute } : item),
+                      }));
+                    }}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Circle, Eye, Grid3X3, History, List, Plus, SkipForward, Target, TrendingUp, Sun, Sunset, Moon } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Circle, Eye, Grid3X3, History, List, Plus, SkipForward, Target, TrendingUp, Sun, Sunset, Moon } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import GoalCard from '@/components/goals/GoalCard';
 import GoalModal from '@/components/goals/GoalModal';
@@ -162,8 +162,15 @@ const PARTES_DIA = [
 ] as const;
 
 const COLOR_DOT: Record<string, string> = {
-  blue: 'bg-blue-500', green: 'bg-green-500', amber: 'bg-amber-500',
-  purple: 'bg-purple-500', red: 'bg-red-500', pink: 'bg-pink-500', cyan: 'bg-cyan-500',
+  blue: '#3b82f6', green: '#22c55e', amber: '#f59e0b',
+  purple: '#a855f7', red: '#ef4444', pink: '#ec4899', cyan: '#06b6d4',
+};
+
+const DEFAULT_RUTINA_COLOR = '#3b82f6';
+
+const getRutinaColorDotProps = (color?: string) => {
+  const resolvedColor = color || DEFAULT_RUTINA_COLOR;
+  return { style: { backgroundColor: COLOR_DOT[resolvedColor] || resolvedColor } };
 };
 
 type SkipModalTarget =
@@ -196,6 +203,7 @@ export default function Goals() {
   const [skipModalTarget, setSkipModalTarget] = useState<SkipModalTarget | null>(null);
   const [skipModalStep, setSkipModalStep] = useState<'choice' | 'reason'>('choice');
   const [skipReasonInput, setSkipReasonInput] = useState('');
+  const [routineGroupExpanded, setRoutineGroupExpanded] = useState<Record<number, boolean>>({});
 
   // Cargar objetivos del backend
   const loadGoals = async () => {
@@ -1381,18 +1389,43 @@ export default function Goals() {
               {rutinaGroups.map(({ asig, goals: groupGoals }) => {
                 const parte = PARTES_DIA.find(p => p.value === asig.parte_dia);
                 const PartIcon = parte?.icon ?? Sun;
+                const completedCount = groupGoals.filter(goal => goal.completed).length;
+                const allCompleted = completedCount === groupGoals.length;
+                const isExpanded = routineGroupExpanded[asig.id] ?? !allCompleted;
                 return (
                   <div key={asig.id} className="mb-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <PartIcon className={`h-3.5 w-3.5 ${parte?.color}`} />
-                      <span className={`text-xs font-semibold ${parte?.color}`}>{parte?.label}</span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <div className={`w-2 h-2 rounded-full ${COLOR_DOT[asig.rutina.color || 'blue']}`} />
-                      <span className="text-xs font-semibold text-foreground">{asig.rutina.nombre}</span>
-                    </div>
-                    <div className={gridClass}>
-                      {groupGoals.map(goal => <GoalCard key={goal.id} {...goalCardProps(goal)} />)}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setRoutineGroupExpanded(prev => ({ ...prev, [asig.id]: !isExpanded }))}
+                      className={`mb-3 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${
+                        allCompleted
+                          ? 'border-success/20 bg-success/5 hover:bg-success/10'
+                          : 'border-border/80 bg-card/40 hover:bg-accent/60'
+                      }`}
+                      aria-expanded={isExpanded}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <PartIcon className={`h-3.5 w-3.5 flex-shrink-0 ${parte?.color}`} />
+                        <span className={`text-xs font-semibold flex-shrink-0 ${parte?.color}`}>{parte?.label}</span>
+                        <span className="text-xs text-muted-foreground">·</span>
+                        <span className="h-2 w-2 rounded-full flex-shrink-0" {...getRutinaColorDotProps(asig.rutina.color)} />
+                        <span className="truncate text-xs font-semibold text-foreground">{asig.rutina.nombre}</span>
+                        {allCompleted && (
+                          <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">
+                            Completada
+                          </span>
+                        )}
+                      </span>
+                      <span className="ml-3 flex flex-shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                        {completedCount}/{groupGoals.length}
+                        <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className={gridClass}>
+                        {groupGoals.map(goal => <GoalCard key={goal.id} {...goalCardProps(goal)} />)}
+                      </div>
+                    )}
                   </div>
                 );
               })}

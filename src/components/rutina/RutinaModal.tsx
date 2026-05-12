@@ -48,6 +48,8 @@ const COLORS = [
   { value: 'cyan', bg: 'bg-cyan-500', ring: 'ring-cyan-500' },
 ];
 
+const DEFAULT_COLOR = '#3b82f6';
+
 const WEEK_DAYS = [
   { value: 0, label: 'Lun' },
   { value: 1, label: 'Mar' },
@@ -122,6 +124,7 @@ export default function RutinaModal({ open, onOpenChange, rutina, defaultParteDi
   const availableRutinaCategories = useMemo(() => {
     const presetMap = new Map(RUTINA_CATEGORIAS.map(cat => [cat.value, cat.emoji]));
     const normalizedPreset = new Set(RUTINA_CATEGORIAS.map(cat => cat.value.toLowerCase().trim()));
+    const seenCustom = new Set<string>();
 
     const mergedCustom = [...existingCategories, ...storedCustomCategories];
 
@@ -129,6 +132,12 @@ export default function RutinaModal({ open, onOpenChange, rutina, defaultParteDi
       .map(cat => cat.trim())
       .filter(cat => cat.length > 0)
       .filter(cat => !normalizedPreset.has(cat.toLowerCase()))
+      .filter(cat => {
+        const key = cat.toLowerCase();
+        if (seenCustom.has(key)) return false;
+        seenCustom.add(key);
+        return true;
+      })
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
       .map(value => ({ value, emoji: '🏷️' }));
 
@@ -166,12 +175,22 @@ export default function RutinaModal({ open, onOpenChange, rutina, defaultParteDi
     setAvailableGoals(goals);
   };
 
+  const selectedPresetColor = useMemo(
+    () => COLORS.find(option => option.value === color)?.value ?? null,
+    [color],
+  );
+
+  const colorPickerValue = useMemo(() => {
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+    return DEFAULT_COLOR;
+  }, [color]);
+
   useEffect(() => {
     if (!open) return;
     if (rutina) {
       setNombre(rutina.nombre);
       setPartesDia(new Set((rutina.partes_dia && rutina.partes_dia.length > 0 ? rutina.partes_dia : [rutina.parte_dia])));
-      setColor(rutina.color || 'blue');
+      setColor(rutina.color || DEFAULT_COLOR);
       setDescripcion(rutina.descripcion || '');
       setDuracionProyectadaMinutos(rutina.duracion_proyectada_minutos ? String(rutina.duracion_proyectada_minutos) : '');
       setDiasSemana(new Set(rutina.dias_semana ?? []));
@@ -195,7 +214,7 @@ export default function RutinaModal({ open, onOpenChange, rutina, defaultParteDi
     } else {
       setNombre('');
       setPartesDia(new Set([defaultParteDia || 'morning']));
-      setColor('blue');
+      setColor(DEFAULT_COLOR);
       setCategoria('');
       setCustomCategoria('');
       setShowCustomInput(false);
@@ -435,10 +454,25 @@ export default function RutinaModal({ open, onOpenChange, rutina, defaultParteDi
                     key={c.value}
                     onClick={() => setColor(c.value)}
                     className={`w-7 h-7 rounded-full ${c.bg} transition-all ${
-                      color === c.value ? `ring-2 ring-offset-2 ring-offset-background ${c.ring}` : 'opacity-60 hover:opacity-100'
+                      selectedPresetColor === c.value ? `ring-2 ring-offset-2 ring-offset-background ${c.ring}` : 'opacity-60 hover:opacity-100'
                     }`}
                   />
                 ))}
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <input
+                  type="color"
+                  value={colorPickerValue}
+                  onChange={e => setColor(e.target.value)}
+                  className="h-10 w-14 cursor-pointer rounded-lg border border-border bg-background p-1"
+                  aria-label="Elegir color personalizado"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">Color personalizado</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Actual: <span className="font-mono uppercase">{color}</span>
+                  </p>
+                </div>
               </div>
             </div>
 

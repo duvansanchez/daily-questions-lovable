@@ -25,13 +25,20 @@ const PARTES = [
 ] as const;
 
 const COLOR_BG: Record<string, string> = {
-  blue: 'bg-blue-500',
-  green: 'bg-green-500',
-  amber: 'bg-amber-500',
-  purple: 'bg-purple-500',
-  red: 'bg-red-500',
-  pink: 'bg-pink-500',
-  cyan: 'bg-cyan-500',
+  blue: '#3b82f6',
+  green: '#22c55e',
+  amber: '#f59e0b',
+  purple: '#a855f7',
+  red: '#ef4444',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
+};
+
+const DEFAULT_RUTINA_COLOR = '#3b82f6';
+
+const getRutinaColorIndicatorProps = (color?: string) => {
+  const resolvedColor = color || DEFAULT_RUTINA_COLOR;
+  return { style: { backgroundColor: COLOR_BG[resolvedColor] || resolvedColor } };
 };
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -102,7 +109,7 @@ export default function RutinaPage() {
   const [skippedGoalReasonByDate, setSkippedGoalReasonByDate] = useState<Record<string, Record<string, string>>>({});
   const [completedGoalsByDate, setCompletedGoalsByDate] = useState<Record<string, Set<string>>>({});
   const [skippedSubGoalsByDate, setSkippedSubGoalsByDate] = useState<Record<string, Set<string>>>({});
-  const [subGoalsByGoalId, setSubGoalsByGoalId] = useState<Record<number, Array<{ id: number; titulo: string; completado: boolean }>>>({});
+  const [subGoalsByGoalId, setSubGoalsByGoalId] = useState<Record<number, Array<{ id: number; titulo: string; completado: boolean; recurrente?: boolean; activa?: boolean; fecha_completado?: string }>>>({});
 
   // Modal crear/editar rutina
   const [showRutinaModal, setShowRutinaModal] = useState(false);
@@ -118,6 +125,7 @@ export default function RutinaPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editingAssignmentGoals, setEditingAssignmentGoals] = useState<RutinaAsignacion | null>(null);
   const [assignmentGoalDraft, setAssignmentGoalDraft] = useState<Set<number>>(new Set());
+  const [assignmentSubGoalDraft, setAssignmentSubGoalDraft] = useState<Record<number, Set<number>>>({});
   const [assignmentSkippedGoalDraft, setAssignmentSkippedGoalDraft] = useState<Set<number>>(new Set());
   const [assignmentSkipReasonDraft, setAssignmentSkipReasonDraft] = useState<Record<number, string>>({});
   const [assignmentSkipReasonOriginal, setAssignmentSkipReasonOriginal] = useState<Record<number, string>>({});
@@ -340,11 +348,21 @@ export default function RutinaPage() {
 
   const openAssignmentGoalEditor = async (asignacion: RutinaAsignacion) => {
     const goals = getGoalsForAssignment(asignacion);
+    await Promise.all(goals.map(goal => {
+      if (subGoalsByGoalId[goal.id] !== undefined) return Promise.resolve();
+      return fetchSubGoalsForGoal(goal.id);
+    }));
     const completedSet = completedGoalsByDate[asignacion.fecha] ?? new Set<string>();
     const completedIds = goals
       .filter(goal => completedSet.has(goal.id.toString()))
       .map(goal => goal.id);
     setAssignmentGoalDraft(new Set(completedIds));
+    const initialSubGoalDraft = goals.reduce<Record<number, Set<number>>>((acc, goal) => {
+      const subGoals = (subGoalsByGoalId[goal.id] ?? []).filter(sub => sub.activa !== false);
+      acc[goal.id] = new Set(subGoals.filter(sub => sub.completado).map(sub => sub.id));
+      return acc;
+    }, {});
+    setAssignmentSubGoalDraft(initialSubGoalDraft);
     try {
       const skippedEntries = await goalsAPI.getSkippedGoalsDetails(asignacion.fecha);
       const skippedIds = new Set(
@@ -471,6 +489,7 @@ export default function RutinaPage() {
     setSavingAssignmentGoals(true);
     try {
       const goalOps: Array<Promise<unknown>> = [];
+      const subGoalOps: Array<Promise<unknown>> = [];
       goals.forEach(goal => {
         const goalId = goal.id.toString();
         const isCurrentlyCompleted = currentCompletedSet.has(goalId);
@@ -496,9 +515,23 @@ export default function RutinaPage() {
 
         if (isCurrentlyCompleted) goalOps.push(goalsAPI.uncompleteGoalForDate(goal.id, targetDate));
         if (isCurrentlySkipped) goalOps.push(goalsAPI.unskipGoalForDate(goal.id, targetDate));
+
+        const subGoals = (subGoalsByGoalId[goal.id] ?? []).filter(sub => sub.activa !== false);
+        const desiredSubGoalSet = assignmentSubGoalDraft[goal.id] ?? new Set<number>();
+        subGoals.forEach(subGoal => {
+          const shouldBeCompleted = desiredSubGoalSet.has(subGoal.id);
+          const isCurrentlyCompleted = Boolean(subGoal.completado);
+          if (shouldBeCompleted === isCurrentlyCompleted) return;
+          subGoalOps.push(
+            goalsAPI.updateSubGoal(subGoal.id, {
+              completado: shouldBeCompleted,
+              fecha_completado: shouldBeCompleted ? `${targetDate}T23:59:59` : null,
+            })
+          );
+        });
       });
 
-      const operationResults = await Promise.allSettled(goalOps);
+      const operationResults = await Promise.allSettled([...goalOps, ...subGoalOps]);
       const failedOperations = operationResults.filter(result => result.status === 'rejected').length;
 
       let refreshedCompletedSet = desiredCompletedSet;
@@ -518,6 +551,7 @@ export default function RutinaPage() {
           ...prev,
           [targetDate]: refreshedSkippedSet,
         }));
+        await Promise.all(goals.map(goal => fetchSubGoalsForGoal(goal.id)));
       } catch (refreshError) {
         console.error('Error refreshing assignment goal states after update:', refreshError);
         setCompletedGoalsByDate(prev => ({
@@ -574,7 +608,9 @@ export default function RutinaPage() {
               id: Number(sub.id),
               titulo: sub.titulo,
               completado: Boolean(sub.completado),
+              recurrente: Boolean(sub.recurrente),
               activa: sub.activa !== false,
+              fecha_completado: sub.fecha_completado,
             }))
             .filter((sub: any) => sub.activa !== false)
           : [],
@@ -661,7 +697,7 @@ export default function RutinaPage() {
         onClick={() => setExpandedId(expandedId === asignacion.id ? null : asignacion.id)}
       >
         <div className="flex items-start gap-1.5">
-          <div className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${COLOR_BG[asignacion.rutina.color || 'blue']}`} />
+          <div className="mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(asignacion.rutina.color)} />
           <p className={`text-[11px] font-medium leading-tight flex-1 min-w-0 truncate ${
             asignacion.completada ? 'line-through text-muted-foreground' : 'text-foreground'
           }`}>
@@ -1208,7 +1244,7 @@ export default function RutinaPage() {
                                       : a.completada ? 'bg-green-500/15' : 'bg-red-500/10'
                                   }`}
                                 >
-                                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${COLOR_BG[a.rutina.color || 'blue']}`} />
+                                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(a.rutina.color)} />
                                   <p className="text-[9px] truncate text-foreground leading-tight flex-1">{a.rutina.nombre}</p>
                                   {stats.skippedCount > 0 && (
                                     <SkipForward className="h-2.5 w-2.5 text-amber-500 flex-shrink-0" />
@@ -1354,7 +1390,7 @@ export default function RutinaPage() {
                                    style={dragProvided.draggableProps.style}
                                  >
                                    <div className="flex items-start gap-3">
-                                     <div className={`w-3 h-full min-h-[40px] rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                      <div className="w-3 h-full min-h-[40px] rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                      <div className="flex-1 min-w-0">
                                        <div className="flex items-start justify-between gap-2">
                                          <p className="text-sm font-semibold text-foreground leading-tight">{rutina.nombre}</p>
@@ -1422,7 +1458,7 @@ export default function RutinaPage() {
                                      style={dragProvided.draggableProps.style}
                                      className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-xl ring-2 ring-primary/30 max-w-[200px]"
                                    >
-                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                      <span className="text-xs font-semibold text-foreground truncate">{rutina.nombre}</span>
                                    </div>,
                                    document.body
@@ -1477,7 +1513,7 @@ export default function RutinaPage() {
                                           style={dragProvided.draggableProps.style}
                                         >
                                           <div className="flex items-start gap-3">
-                                            <div className={`w-3 h-full min-h-[40px] rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                             <div className="w-3 h-full min-h-[40px] rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                             <div className="flex-1 min-w-0">
                                               <div className="flex items-start justify-between gap-2">
                                                 <p className="text-sm font-semibold text-foreground leading-tight">{rutina.nombre}</p>
@@ -1543,7 +1579,7 @@ export default function RutinaPage() {
                                             style={dragProvided.draggableProps.style}
                                             className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-xl ring-2 ring-primary/30 max-w-[200px]"
                                           >
-                                            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                             <span className="text-xs font-semibold text-foreground truncate">{rutina.nombre}</span>
                                           </div>,
                                           document.body
@@ -1607,7 +1643,7 @@ export default function RutinaPage() {
                                           style={dragProvided.draggableProps.style}
                                         >
                                           <div className="flex items-start gap-3">
-                                            <div className={`w-3 h-full min-h-[40px] rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                             <div className="w-3 h-full min-h-[40px] rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                             <div className="flex-1 min-w-0">
                                               <div className="flex items-start justify-between gap-2">
                                                 <p className="text-sm font-semibold text-foreground leading-tight">{rutina.nombre}</p>
@@ -1675,7 +1711,7 @@ export default function RutinaPage() {
                                             style={dragProvided.draggableProps.style}
                                             className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-xl ring-2 ring-primary/30 max-w-[200px]"
                                           >
-                                            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                                             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                                             <span className="text-xs font-semibold text-foreground truncate">{rutina.nombre}</span>
                                           </div>,
                                           document.body
@@ -1749,7 +1785,7 @@ export default function RutinaPage() {
                       }}
                       className="w-full flex items-center gap-3 text-left"
                     >
-                      <div className={`w-3 h-10 rounded-full flex-shrink-0 ${COLOR_BG[rutina.color || 'blue']}`} />
+                      <div className="w-3 h-10 rounded-full flex-shrink-0" {...getRutinaColorIndicatorProps(rutina.color)} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground">{rutina.nombre}</p>
                         {(rutina.objetivos ?? []).length > 0 && (
@@ -1864,6 +1900,8 @@ export default function RutinaPage() {
               {getGoalsForAssignment(editingAssignmentGoals).map(goal => {
                 const status = getAssignmentGoalDraftStatus(goal.id);
                 const skipReason = assignmentSkipReasonDraft[goal.id];
+                const goalSubGoals = (subGoalsByGoalId[goal.id] ?? []).filter(sub => sub.activa !== false);
+                const subGoalDraft = assignmentSubGoalDraft[goal.id] ?? new Set<number>();
                 return (
                   <div
                     key={goal.id}
@@ -1917,6 +1955,39 @@ export default function RutinaPage() {
                     {status === 'skipped' && skipReason ? (
                       <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">Motivo: {skipReason}</p>
                     ) : null}
+
+                    {goalSubGoals.length > 0 && (
+                      <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-background/60 p-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Subobjetivos</p>
+                        {goalSubGoals.map(subGoal => {
+                          const subChecked = subGoalDraft.has(subGoal.id);
+                          return (
+                            <button
+                              key={subGoal.id}
+                              type="button"
+                              onClick={() => {
+                                setAssignmentSubGoalDraft(prev => {
+                                  const next = { ...prev };
+                                  const current = new Set(next[goal.id] ?? []);
+                                  if (subChecked) current.delete(subGoal.id);
+                                  else current.add(subGoal.id);
+                                  next[goal.id] = current;
+                                  return next;
+                                });
+                              }}
+                              className={`w-full flex items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors ${subChecked ? 'border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-300' : 'border-border bg-background text-foreground hover:bg-muted'}`}
+                            >
+                              <span className="text-xs">•</span>
+                              <span className="text-xs flex-1 truncate">{subGoal.titulo}</span>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${subGoal.recurrente ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                {subGoal.recurrente ? 'Recurrente' : 'Normal'}
+                              </span>
+                              {subChecked ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-300" /> : <Circle className="h-3.5 w-3.5 text-muted-foreground" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

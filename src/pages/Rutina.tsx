@@ -8,7 +8,7 @@ import {
 import { getLocalDateString } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { goalsAPI, rutinasAPI } from '@/services/api';
-import type { Rutina, RutinaAsignacion, DiaSemana } from '@/services/api';
+import type { Rutina, RutinaAsignacion, DiaSemana, GoalSimple } from '@/services/api';
 import RutinaModal from '@/components/rutina/RutinaModal';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -43,6 +43,28 @@ const getRutinaColorIndicatorProps = (color?: string) => {
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const DAY_LABELS_ASCII = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+
+type StandaloneGoal = GoalSimple & {
+  recurrente?: boolean;
+  programado_para?: string | null;
+  fecha_programada?: string | null;
+  completado?: boolean;
+  fecha_completado?: string | null;
+};
+
+const normalizeGoalDayPart = (value?: string | null): 'morning' | 'afternoon' | 'evening' => {
+  const normalized = (value || '').toLowerCase().trim();
+  if (normalized === 'morning' || normalized === 'manana' || normalized === 'mañana') return 'morning';
+  if (normalized === 'afternoon' || normalized === 'tarde') return 'afternoon';
+  if (normalized === 'evening' || normalized === 'noche') return 'evening';
+  return 'morning';
+};
+
+const getGoalScheduledIsoDate = (goal: StandaloneGoal): string | null => {
+  if (goal.fecha_programada) return goal.fecha_programada.slice(0, 10);
+  if (goal.programado_para && /^\d{4}-\d{2}-\d{2}$/.test(goal.programado_para)) return goal.programado_para;
+  return null;
+};
 
 const MONTH_NAMES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -98,6 +120,8 @@ export default function RutinaPage() {
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
   const [semana, setSemana] = useState<DiaSemana[]>([]);
   const [rutinas, setRutinas] = useState<Rutina[]>([]);
+  const [standaloneGoals, setStandaloneGoals] = useState<StandaloneGoal[]>([]);
+  const [updatingStandaloneGoalIds, setUpdatingStandaloneGoalIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Historial
@@ -110,6 +134,7 @@ export default function RutinaPage() {
   const [completedGoalsByDate, setCompletedGoalsByDate] = useState<Record<string, Set<string>>>({});
   const [skippedSubGoalsByDate, setSkippedSubGoalsByDate] = useState<Record<string, Set<string>>>({});
   const [subGoalsByGoalId, setSubGoalsByGoalId] = useState<Record<number, Array<{ id: number; titulo: string; completado: boolean; recurrente?: boolean; activa?: boolean; fecha_completado?: string }>>>({});
+  const [loadingSubGoalIds, setLoadingSubGoalIds] = useState<Set<number>>(new Set());
 
   // Modal crear/editar rutina
   const [showRutinaModal, setShowRutinaModal] = useState(false);
@@ -123,6 +148,7 @@ export default function RutinaPage() {
 
   // Detalle de asignación expandido
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedUnassignedKey, setExpandedUnassignedKey] = useState<string | null>(null);
   const [editingAssignmentGoals, setEditingAssignmentGoals] = useState<RutinaAsignacion | null>(null);
   const [assignmentGoalDraft, setAssignmentGoalDraft] = useState<Set<number>>(new Set());
   const [assignmentSubGoalDraft, setAssignmentSubGoalDraft] = useState<Record<number, Set<number>>>({});
@@ -251,9 +277,40 @@ export default function RutinaPage() {
     }
   }, []);
 
+  const fetchStandaloneGoals = useCallback(async () => {
+    try {
+      const firstPage = await goalsAPI.getGoals(1, 100);
+      const totalPages = firstPage.pages || 1;
+      const restPages = totalPages > 1
+        ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) => goalsAPI.getGoals(index + 2, 100)))
+        : [];
+      const allItems = [
+        ...firstPage.items,
+        ...restPages.flatMap(page => page.items),
+      ];
+
+      setStandaloneGoals(allItems.map((item: any) => ({
+        id: Number(item.id),
+        titulo: item.titulo,
+        icono: item.icono,
+        categoria: item.categoria,
+        frecuencia: item.frecuencia,
+        parte_dia: normalizeGoalDayPart(item.parte_dia),
+        recurrente: Boolean(item.recurrente),
+        programado_para: item.programado_para || null,
+        fecha_programada: item.fecha_programada || null,
+        completado: Boolean(item.completado),
+        fecha_completado: item.fecha_completado || null,
+      })));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRutinas();
-  }, []);
+    fetchStandaloneGoals();
+  }, [fetchRutinas, fetchStandaloneGoals]);
 
   useEffect(() => {
     fetchSemana(weekStart);
@@ -331,6 +388,12 @@ export default function RutinaPage() {
     return 'pending';
   };
 
+  const getStandaloneGoalStatusOnDate = (goal: StandaloneGoal, fecha: string): 'completed' | 'skipped' | 'pending' => {
+    if (goal.recurrente) return getGoalStatusOnDate(goal.id, fecha);
+    if (goal.completado && goal.fecha_completado?.slice(0, 10) === fecha) return 'completed';
+    return 'pending';
+  };
+
   const getGoalSkipReasonOnDate = (goalId: number, fecha: string) =>
     skippedGoalReasonByDate[fecha]?.[goalId.toString()];
 
@@ -344,6 +407,31 @@ export default function RutinaPage() {
     return asignacion.objetivo_ids
       .map(goalId => goalById.get(goalId))
       .filter((goal): goal is (typeof allGoals)[number] => Boolean(goal) && !disabledIds.has(goal.id));
+  };
+
+  const unassignedGoals = useMemo(() => {
+    const assignedIds = new Set(
+      rutinas.flatMap(rutina => (rutina.objetivos ?? []).map(goal => goal.id))
+    );
+    return standaloneGoals.filter(goal => !assignedIds.has(goal.id) && goal.categoria !== 'general');
+  }, [standaloneGoals, rutinas]);
+
+  const getUnassignedGoalsForPart = (parte: string, iso: string) => {
+    const filtered = unassignedGoals.filter(goal => {
+      const goalParte = normalizeGoalDayPart(goal.parte_dia);
+      const scheduledIso = getGoalScheduledIsoDate(goal);
+      const hasExplicitDayPart = Boolean(goal.parte_dia && String(goal.parte_dia).trim());
+      if (scheduledIso === iso && !hasExplicitDayPart) return true;
+      if (goalParte !== parte) return false;
+      return goal.recurrente || scheduledIso === iso;
+    });
+
+    return filtered.sort((a, b) => {
+      const aScheduledToday = getGoalScheduledIsoDate(a) === iso ? 1 : 0;
+      const bScheduledToday = getGoalScheduledIsoDate(b) === iso ? 1 : 0;
+      if (aScheduledToday !== bScheduledToday) return bScheduledToday - aScheduledToday;
+      return a.titulo.localeCompare(b.titulo, 'es', { sensitivity: 'base' });
+    });
   };
 
   const openAssignmentGoalEditor = async (asignacion: RutinaAsignacion) => {
@@ -599,6 +687,11 @@ export default function RutinaPage() {
   };
 
   const fetchSubGoalsForGoal = useCallback(async (goalId: number) => {
+    setLoadingSubGoalIds(prev => {
+      const next = new Set(prev);
+      next.add(goalId);
+      return next;
+    });
     try {
       const subGoals = await goalsAPI.getSubGoals(goalId);
       setSubGoalsByGoalId(prev => ({
@@ -618,6 +711,12 @@ export default function RutinaPage() {
     } catch (error) {
       console.error(`Error loading subgoals for goal ${goalId}:`, error);
       setSubGoalsByGoalId(prev => ({ ...prev, [goalId]: [] }));
+    } finally {
+      setLoadingSubGoalIds(prev => {
+        const next = new Set(prev);
+        next.delete(goalId);
+        return next;
+      });
     }
   }, []);
 
@@ -648,6 +747,18 @@ export default function RutinaPage() {
       void fetchSubGoalsForGoal(goalId);
     });
   }, [semana, subGoalsByGoalId, fetchSubGoalsForGoal]);
+
+  useEffect(() => {
+    if (!expandedUnassignedKey) return;
+
+    const [iso, parte] = expandedUnassignedKey.split('|');
+    if (!iso || !parte) return;
+
+    getUnassignedGoalsForPart(parte, iso).forEach((goal) => {
+      if (subGoalsByGoalId[goal.id] !== undefined) return;
+      void fetchSubGoalsForGoal(goal.id);
+    });
+  }, [expandedUnassignedKey, subGoalsByGoalId, fetchSubGoalsForGoal, unassignedGoals]);
 
   const getAssignmentSkipStats = (asignacion: RutinaAsignacion, fecha: string) => {
     const goals = getGoalsForAssignment(asignacion);
@@ -690,6 +801,11 @@ export default function RutinaPage() {
 
   const renderAssignmentCard = (asignacion: RutinaAsignacion, iso: string, skippedCount: number, isNeutralBySkips: boolean) => (
     <div className="h-full flex flex-col gap-1">
+      {(() => {
+        const goals = getGoalsForAssignment(asignacion);
+        const completedCount = goals.filter(goal => getGoalStatusOnDate(goal.id, iso) === 'completed').length;
+        const pendingCount = goals.filter(goal => getGoalStatusOnDate(goal.id, iso) === 'pending').length;
+        return (
       <div
         className={`rounded-lg border border-border bg-background p-2 flex-1 cursor-pointer hover:shadow-sm transition-shadow ${
           asignacion.completada ? 'opacity-60' : ''
@@ -706,7 +822,7 @@ export default function RutinaPage() {
         </div>
         {getGoalsForAssignment(asignacion).length > 0 && (
           <p className="text-[10px] text-muted-foreground mt-1 pl-4">
-            {getGoalsForAssignment(asignacion).length} objetivo{getGoalsForAssignment(asignacion).length !== 1 ? 's' : ''}
+            {goals.length} objetivo{goals.length !== 1 ? 's' : ''}
             {skippedCount > 0 && ` · ${skippedCount} saltado${skippedCount !== 1 ? 's' : ''}`}
           </p>
         )}
@@ -723,7 +839,28 @@ export default function RutinaPage() {
         {asignacion.es_automatica && (
           <p className="text-[9px] text-primary mt-1 pl-4">Automatica</p>
         )}
+
+        {goals.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5 pl-4">
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-green-600">
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              {completedCount}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-red-600">
+              <Circle className="h-2.5 w-2.5" />
+              {pendingCount}
+            </span>
+            {skippedCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600">
+                <SkipForward className="h-2.5 w-2.5" />
+                {skippedCount}
+              </span>
+            )}
+          </div>
+        )}
       </div>
+        );
+      })()}
 
       <div className="flex items-center gap-1">
         <button
@@ -836,6 +973,163 @@ export default function RutinaPage() {
     </div>
   );
 
+  const renderUnassignedGoalsCard = (goals: StandaloneGoal[], iso: string, parte: string) => {
+    if (goals.length === 0) return null;
+    const key = `${iso}|${parte}`;
+    const skippedCount = goals.filter(goal => getGoalStatusOnDate(goal.id, iso) === 'skipped').length;
+    const scheduledGoals = goals.filter(goal => getGoalScheduledIsoDate(goal) === iso);
+    const dailyGoals = goals.filter(goal => getGoalScheduledIsoDate(goal) !== iso);
+
+    const renderStandaloneGoalItem = (goal: StandaloneGoal) => {
+      const goalStatus = getStandaloneGoalStatusOnDate(goal, iso);
+      const goalSkipReason = getGoalSkipReasonOnDate(goal.id, iso);
+      const goalSubGoals = subGoalsByGoalId[goal.id] ?? [];
+      const isLoadingSubGoals = loadingSubGoalIds.has(goal.id);
+      const isUpdatingGoal = updatingStandaloneGoalIds.has(goal.id);
+
+      return (
+        <div key={goal.id} className="rounded-md border border-border/70 bg-background/70 px-2 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] flex-shrink-0">{goal.icono || '🎯'}</span>
+            <p className="text-[10px] text-foreground truncate flex-1">{goal.titulo}</p>
+
+            {goalStatus === 'completed' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-600">
+                <CheckCircle2 className="h-2.5 w-2.5" />
+                Completado
+              </span>
+            )}
+            {goalStatus === 'skipped' && (
+              <div className="flex flex-col items-end gap-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-600">
+                  <SkipForward className="h-2.5 w-2.5" />
+                  Saltado
+                </span>
+                {goalSkipReason ? (
+                  <span className="max-w-[180px] text-right text-[9px] text-amber-700 dark:text-amber-300">
+                    Motivo: {goalSkipReason}
+                  </span>
+                ) : null}
+              </div>
+            )}
+            {goalStatus === 'pending' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600">
+                <Circle className="h-2.5 w-2.5" />
+                Pendiente
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={isUpdatingGoal || goalStatus === 'completed'}
+              onClick={() => void handleStandaloneGoalStatusChange(goal, iso, 'completed')}
+              className="rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-[9px] font-semibold text-green-700 transition-colors hover:bg-green-500/15 disabled:opacity-50"
+            >
+              Completar
+            </button>
+            <button
+              type="button"
+              disabled={isUpdatingGoal || goalStatus === 'pending'}
+              onClick={() => void handleStandaloneGoalStatusChange(goal, iso, 'pending')}
+              className="rounded-md border border-border bg-muted/60 px-2 py-1 text-[9px] font-semibold text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+            >
+              Pendiente
+            </button>
+            {goal.recurrente && (
+              <button
+                type="button"
+                disabled={isUpdatingGoal || goalStatus === 'skipped'}
+                onClick={() => void handleStandaloneGoalStatusChange(goal, iso, 'skipped')}
+                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/15 disabled:opacity-50"
+              >
+                Saltar
+              </button>
+            )}
+            {isUpdatingGoal && (
+              <span className="text-[9px] text-muted-foreground">Guardando...</span>
+            )}
+          </div>
+
+          {isLoadingSubGoals && (
+            <div className="mt-1.5 pl-4 border-l border-border/60">
+              <p className="text-[9px] text-muted-foreground">Cargando subobjetivos...</p>
+            </div>
+          )}
+
+          {!isLoadingSubGoals && goalSubGoals.length > 0 && (
+            <div className="mt-1.5 pl-4 space-y-1 border-l border-border/60">
+              {goalSubGoals.map(sub => {
+                const subSkipped = isSubGoalSkippedOnDate(sub.id, iso);
+                const subCompleted = sub.completado;
+                return (
+                  <div key={sub.id} className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-muted-foreground">•</span>
+                    <p className="text-[9px] text-foreground/90 truncate flex-1">{sub.titulo}</p>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-semibold ${sub.recurrente ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                      {sub.recurrente ? 'Recurrente' : 'Normal'}
+                    </span>
+                    {subCompleted ? (
+                      <span className="text-[9px] font-medium text-green-600">Completado</span>
+                    ) : subSkipped ? (
+                      <span className="text-[9px] font-medium text-amber-600">Saltado</span>
+                    ) : (
+                      <span className="text-[9px] font-medium text-red-600">Pendiente</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="h-full flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => setExpandedUnassignedKey(expandedUnassignedKey === key ? null : key)}
+          className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/35 p-2 text-left hover:bg-muted/60 transition-colors"
+          title="Objetivos sin rutina asociada"
+        >
+          <div className="flex items-start gap-1.5">
+            <div className="mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 bg-muted-foreground/60" />
+            <p className="text-[11px] font-medium leading-tight flex-1 min-w-0 truncate text-foreground">
+              Sin rutina
+            </p>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1 pl-4">
+            {goals.length} objetivo{goals.length !== 1 ? 's' : ''}
+            {skippedCount > 0 && ` · ${skippedCount} saltado${skippedCount !== 1 ? 's' : ''}`}
+          </p>
+        </button>
+
+        {expandedUnassignedKey === key && (
+          <div className="rounded-lg bg-muted/50 p-2 space-y-1 animate-fade-in">
+            {scheduledGoals.length > 0 && (
+              <div className="space-y-1">
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  Programados
+                </p>
+                {scheduledGoals.map(renderStandaloneGoalItem)}
+              </div>
+            )}
+            {dailyGoals.length > 0 && (
+              <div className="space-y-1">
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Recurrentes
+                </p>
+                {dailyGoals.map(renderStandaloneGoalItem)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const handleToggleCompleta = async (asignacion: RutinaAsignacion) => {
     const newCompleted = !asignacion.completada;
     try {
@@ -897,6 +1191,83 @@ export default function RutinaPage() {
       if (expandedId === asignacion.id) setExpandedId(null);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleStandaloneGoalStatusChange = async (
+    goal: StandaloneGoal,
+    fecha: string,
+    status: 'completed' | 'skipped' | 'pending',
+  ) => {
+    if (updatingStandaloneGoalIds.has(goal.id)) return;
+
+    setUpdatingStandaloneGoalIds(prev => new Set(prev).add(goal.id));
+    try {
+      if (goal.recurrente) {
+        if (status === 'completed') {
+          await goalsAPI.unskipGoalForDate(goal.id, fecha).catch(() => undefined);
+          await goalsAPI.completeGoalForDate(goal.id, fecha);
+        } else if (status === 'skipped') {
+          await goalsAPI.uncompleteGoalForDate(goal.id, fecha).catch(() => undefined);
+          await goalsAPI.skipGoalForDate(goal.id, fecha);
+        } else {
+          await Promise.allSettled([
+            goalsAPI.uncompleteGoalForDate(goal.id, fecha),
+            goalsAPI.unskipGoalForDate(goal.id, fecha),
+          ]);
+        }
+
+        setCompletedGoalsByDate(prev => {
+          const next = { ...prev };
+          const existing = new Set(next[fecha] ?? []);
+          if (status === 'completed') existing.add(goal.id.toString());
+          else existing.delete(goal.id.toString());
+          next[fecha] = existing;
+          return next;
+        });
+
+        setSkippedGoalsByDate(prev => {
+          const next = { ...prev };
+          const existing = new Set(next[fecha] ?? []);
+          if (status === 'skipped') existing.add(goal.id.toString());
+          else existing.delete(goal.id.toString());
+          next[fecha] = existing;
+          return next;
+        });
+
+        setSkippedGoalReasonByDate(prev => {
+          const next = { ...prev };
+          const reasonMap = { ...(next[fecha] ?? {}) };
+          if (status !== 'skipped') delete reasonMap[goal.id.toString()];
+          next[fecha] = reasonMap;
+          return next;
+        });
+      } else {
+        const isCompleted = status === 'completed';
+        await goalsAPI.updateGoal(goal.id, {
+          completado: isCompleted,
+          fecha_completado: isCompleted ? `${fecha}T23:59:59` : null,
+        });
+
+        setStandaloneGoals(prev => prev.map(item => item.id === goal.id ? {
+          ...item,
+          completado: isCompleted,
+          fecha_completado: isCompleted ? `${fecha}T23:59:59` : null,
+        } : item));
+      }
+    } catch (error) {
+      console.error('Error updating standalone goal status:', error);
+      toast({
+        title: 'No se pudo actualizar',
+        description: 'Ocurrió un error al cambiar el estado de este objetivo.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdatingStandaloneGoalIds(prev => {
+        const next = new Set(prev);
+        next.delete(goal.id);
+        return next;
+      });
     }
   };
 
@@ -1102,6 +1473,7 @@ export default function RutinaPage() {
             {weekDates.map(date => {
               const iso = toISODate(date);
               const asignaciones = getAsignaciones(iso, parte);
+              const unassignedGoalsForPart = getUnassignedGoalsForPart(parte, iso);
               const today = isToday(iso);
 
               return (
@@ -1118,6 +1490,8 @@ export default function RutinaPage() {
                         </div>
                       );
                     })}
+
+                    {renderUnassignedGoalsCard(unassignedGoalsForPart, iso, parte)}
 
                     <button
                       onClick={() => {

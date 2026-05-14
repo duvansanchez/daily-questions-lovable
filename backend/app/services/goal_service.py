@@ -6,12 +6,28 @@ from sqlalchemy.orm import Session
 from app.models.models import Goal, GoalSkipDay, GoalCompletionDay
 from app.models.subgoal import SubGoal
 from app.schemas.schemas import GoalCreate, GoalUpdate
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 
 
 class GoalService:
     """Servicio para objetivos."""
+
+    @staticmethod
+    def _resolve_schedule(programado_para: Optional[str], fecha_programada: Optional[str]) -> tuple[Optional[str], Optional[datetime]]:
+        normalized = (programado_para or '').strip().lower()
+
+        if normalized in {'tomorrow', 'manana', 'mañana'}:
+            target_date = datetime.now() + timedelta(days=1)
+            return 'mañana', target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        if normalized == 'fecha_especifica' and fecha_programada:
+            return 'fecha_especifica', datetime.fromisoformat(str(fecha_programada))
+
+        if normalized and len(normalized) == 10 and normalized.count('-') == 2:
+            return 'fecha_especifica', datetime.fromisoformat(normalized)
+
+        return programado_para, None
 
     @staticmethod
     def reset_stale_recurring_goals(db: Session, today_key: Optional[str] = None) -> None:
@@ -53,6 +69,8 @@ class GoalService:
             if parent_exists:
                 objetivo_padre_id = goal.objetivo_padre_id
         
+        schedule_type, schedule_date = GoalService._resolve_schedule(goal.programado_para, goal.fecha_programada)
+
         db_goal = Goal(
             user_id=1,  # Default user_id, asegúrate de que el usuario con ID 1 existe en la DB
             titulo=goal.titulo,
@@ -68,7 +86,8 @@ class GoalService:
             objetivo_padre_id=objetivo_padre_id,
             fecha_inicio=goal.fecha_inicio,
             fecha_fin=goal.fecha_fin,
-            programado_para=goal.programado_para,
+            fecha_programada=schedule_date,
+            programado_para=schedule_type,
             fecha_creacion=datetime.now(),  # Asignar fecha de creación automáticamente
         )
         db.add(db_goal)
@@ -124,7 +143,15 @@ class GoalService:
             return None
         
         update_data = goal.model_dump(exclude_unset=True)
-        
+
+        if 'programado_para' in update_data or 'fecha_programada' in update_data:
+            schedule_type, schedule_date = GoalService._resolve_schedule(
+                update_data.get('programado_para'),
+                update_data.get('fecha_programada'),
+            )
+            update_data['programado_para'] = schedule_type
+            update_data['fecha_programada'] = schedule_date
+
         # Si se actualiza "completado", manejar fecha_completado
         if 'completado' in update_data:
             if update_data['completado'] is True:

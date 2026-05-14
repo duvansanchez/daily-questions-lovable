@@ -4,7 +4,7 @@ Servicios para frases (Phrases y PhraseCategories).
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models.models import Phrase, PhraseCategory, PhraseSubcategory, PhraseReviewLog, ReviewPlan
+from app.models.models import Phrase, PhraseCategory, PhraseSubcategory, PhraseReviewLog, ReviewPlan, PhraseFeedback
 from app.schemas.schemas import (
     PhraseCategoryCreate, PhraseCategoryUpdate,
     PhraseCreate, PhraseUpdate,
@@ -586,3 +586,124 @@ class PhraseService:
         total = query.count()
         logs = query.order_by(PhraseReviewLog.reviewed_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
         return logs, total
+
+    @staticmethod
+    def get_feedbacks_for_date(db: Session, date: str) -> List[dict]:
+        """Obtener feedbacks guardados para frases en una fecha."""
+        rows = db.execute(
+            text("""
+                SELECT id, phrase_id, fecha, texto, fecha_creacion, fecha_actualizacion
+                FROM phrase_feedback
+                WHERE fecha = :d
+                ORDER BY phrase_id ASC, id DESC
+            """),
+            {"d": date}
+        ).fetchall()
+
+        return [
+            {
+                "id": str(row[0]),
+                "phrase_id": str(row[1]),
+                "date": row[2],
+                "text": row[3] or "",
+                "created_at": row[4].isoformat() if row[4] else None,
+                "updated_at": row[5].isoformat() if row[5] else None,
+            }
+            for row in rows
+        ]
+
+    @staticmethod
+    def get_feedback_history_for_phrase(db: Session, phrase_id: str) -> List[dict]:
+        """Obtener historial de feedbacks de una frase."""
+        rows = db.execute(
+            text("""
+                SELECT id, phrase_id, fecha, texto, fecha_creacion, fecha_actualizacion
+                FROM phrase_feedback
+                WHERE phrase_id = :pid
+                ORDER BY fecha DESC, id DESC
+            """),
+            {"pid": int(phrase_id)}
+        ).fetchall()
+
+        return [
+            {
+                "id": str(row[0]),
+                "phrase_id": str(row[1]),
+                "date": row[2],
+                "text": row[3] or "",
+                "created_at": row[4].isoformat() if row[4] else None,
+                "updated_at": row[5].isoformat() if row[5] else None,
+            }
+            for row in rows
+        ]
+
+    @staticmethod
+    def save_phrase_feedback(db: Session, date: str, phrase_id: str, feedback_text: str) -> dict:
+        """Crear o actualizar feedback de una frase para una fecha."""
+        now = datetime.utcnow()
+        cleaned_text = (feedback_text or "").strip()
+        if not cleaned_text:
+            raise ValueError("El feedback no puede estar vacío")
+
+        exists = db.execute(
+            text("""
+                SELECT id
+                FROM phrase_feedback
+                WHERE phrase_id = :pid AND fecha = :d
+            """),
+            {"pid": int(phrase_id), "d": date}
+        ).fetchone()
+
+        if exists:
+            db.execute(
+                text("""
+                    UPDATE phrase_feedback
+                    SET texto = :text, fecha_actualizacion = :updated
+                    WHERE id = :id
+                """),
+                {"text": cleaned_text, "updated": now, "id": exists[0]}
+            )
+        else:
+            db.execute(
+                text("""
+                    INSERT INTO phrase_feedback (phrase_id, fecha, texto, fecha_creacion, fecha_actualizacion)
+                    VALUES (:pid, :fecha, :texto, :created, :updated)
+                """),
+                {
+                    "pid": int(phrase_id),
+                    "fecha": date,
+                    "texto": cleaned_text,
+                    "created": now,
+                    "updated": now,
+                }
+            )
+
+        db.commit()
+
+        row = db.execute(
+            text("""
+                SELECT TOP 1 id, phrase_id, fecha, texto, fecha_creacion, fecha_actualizacion
+                FROM phrase_feedback
+                WHERE phrase_id = :pid AND fecha = :d
+                ORDER BY id DESC
+            """),
+            {"pid": int(phrase_id), "d": date}
+        ).fetchone()
+
+        return {
+            "id": str(row[0]),
+            "phrase_id": str(row[1]),
+            "date": row[2],
+            "text": row[3] or "",
+            "created_at": row[4].isoformat() if row[4] else None,
+            "updated_at": row[5].isoformat() if row[5] else None,
+        }
+
+    @staticmethod
+    def delete_phrase_feedback(db: Session, date: str, phrase_id: str) -> None:
+        """Eliminar feedback de una frase para una fecha."""
+        db.execute(
+            text("DELETE FROM phrase_feedback WHERE phrase_id = :pid AND fecha = :d"),
+            {"pid": int(phrase_id), "d": date}
+        )
+        db.commit()

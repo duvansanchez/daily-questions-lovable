@@ -18,6 +18,8 @@ class QuestionService:
     @staticmethod
     def create_question(db: Session, question: QuestionCreate) -> Question:
         """Crear pregunta."""
+        next_order = db.query(Question.orden).order_by(Question.orden.desc(), Question.id.desc()).first()
+        resolved_order = question.order if question.order is not None else ((next_order[0] + 1) if next_order and next_order[0] is not None else 1)
         db_question = Question(
             text=question.text,
             descripcion=question.descripcion,
@@ -26,6 +28,7 @@ class QuestionService:
             is_required=question.is_required,
             active=question.active,
             options=question.options,
+            orden=resolved_order,
         )
         db.add(db_question)
         db.commit()
@@ -62,7 +65,7 @@ class QuestionService:
                 query = query.filter(Question.frecuencia == frequency)
         
         total = query.count()
-        questions = query.order_by(Question.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        questions = query.order_by(Question.orden.asc(), Question.created_at.asc(), Question.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
         return questions, total
     
     @staticmethod
@@ -87,6 +90,7 @@ class QuestionService:
             'categoria': 'categoria',
             'is_required': 'is_required',
             'active': 'active',
+            'order': 'orden',
         }
 
         update_data = question.model_dump(exclude_unset=True)

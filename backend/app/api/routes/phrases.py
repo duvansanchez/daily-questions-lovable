@@ -2,7 +2,7 @@
 Endpoints para frases (Phrases y Categories).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     PhraseSubcategoryCreate, PhraseSubcategoryUpdate, PhraseSubcategoryResponse,
     ReviewPlanCreate, ReviewPlanUpdate, ReviewPlanResponse,
     PhraseReviewCreate, PhraseReviewLogResponse,
+    PhraseFeedbackCreate, PhraseFeedbackResponse,
 )
 from app.services.phrase_service import (
     PhraseCategoryService, PhraseSubcategoryService, PhraseService, build_phrase_report
@@ -50,6 +51,10 @@ class PhraseAudioPreferencesPayload(BaseModel):
     rate: float | None = None
     pitch: float | None = None
     pause_ms: int | None = None
+
+
+class PhraseFeedbackPayload(BaseModel):
+    text: str
 
 
 # ==================== PHRASE CATEGORIES ====================
@@ -320,6 +325,51 @@ def list_review_logs(
         "pages": pages,
         "items": logs,
     }
+
+
+@router.get("/feedbacks", response_model=List[PhraseFeedbackResponse])
+def get_phrase_feedbacks(
+    date: str = Query(..., description="Fecha YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    """Obtiene los feedbacks guardados para frases de una fecha."""
+    return PhraseService.get_feedbacks_for_date(db, date)
+
+
+@router.get("/feedbacks/history/{phrase_id}", response_model=List[PhraseFeedbackResponse])
+def get_phrase_feedback_history(phrase_id: str, db: Session = Depends(get_db)):
+    """Obtiene el historial de feedbacks de una frase."""
+    return PhraseService.get_feedback_history_for_phrase(db, phrase_id)
+
+
+@router.post("/feedbacks/{phrase_id}", response_model=PhraseFeedbackResponse)
+def save_phrase_feedback(
+    phrase_id: str,
+    date: str = Query(..., description="Fecha YYYY-MM-DD"),
+    data: PhraseFeedbackCreate = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Crea o actualiza feedback libre de una frase para una fecha."""
+    try:
+        return PhraseService.save_phrase_feedback(db, date, phrase_id, data.text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/feedbacks/{phrase_id}")
+def delete_phrase_feedback(
+    phrase_id: str,
+    date: str = Query(..., description="Fecha YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    """Elimina feedback de una frase para una fecha."""
+    try:
+        PhraseService.delete_phrase_feedback(db, date, phrase_id)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/report", response_model=dict)

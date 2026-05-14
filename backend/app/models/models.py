@@ -175,6 +175,7 @@ class Phrase(Base):
     category = relationship("PhraseCategory", back_populates="phrases", foreign_keys=[categoria_id])
     subcategory = relationship("PhraseSubcategory", back_populates="phrases", foreign_keys=[subcategoria_id])
     review_logs = relationship("PhraseReviewLog", back_populates="phrase", cascade="all, delete-orphan")
+    feedbacks = relationship("PhraseFeedback", back_populates="phrase", cascade="all, delete-orphan")
 
 
 class PhraseReviewLog(Base):
@@ -190,6 +191,23 @@ class PhraseReviewLog(Base):
 
     phrase = relationship("Phrase", back_populates="review_logs", foreign_keys=[phrase_id])
     review_plan = relationship("ReviewPlan", foreign_keys=[review_plan_id])
+
+
+class PhraseFeedback(Base):
+    """Feedback libre asociado a una frase en una fecha concreta."""
+    __tablename__ = "phrase_feedback"
+    __table_args__ = (
+        UniqueConstraint("phrase_id", "fecha", name="uq_phrase_feedback_phrase_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phrase_id = Column(Integer, ForeignKey("frases.id"), nullable=False)
+    fecha = Column(String(10), nullable=False)  # YYYY-MM-DD
+    texto = Column(Text, nullable=False)
+    fecha_creacion = Column(DateTime, nullable=True, default=datetime.now)
+    fecha_actualizacion = Column(DateTime, nullable=True, default=datetime.now, onupdate=datetime.now)
+
+    phrase = relationship("Phrase", back_populates="feedbacks", foreign_keys=[phrase_id])
 
 
 class PhraseAudioPreference(Base):
@@ -219,6 +237,7 @@ class Question(Base):
     is_required = Column(Boolean, nullable=False)
     categoria = Column(String(100), nullable=False)
     frecuencia = Column(String(20), nullable=True)
+    orden = Column(Integer, nullable=False, default=0)
     
     # Relaciones
     responses = relationship("QuestionResponse", back_populates="question", foreign_keys="QuestionResponse.question_id")

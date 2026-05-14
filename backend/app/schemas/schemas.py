@@ -26,6 +26,7 @@ class GoalBase(BaseModel):
     objetivo_padre_id: Optional[int] = None
     fecha_inicio: Optional[str] = None
     fecha_fin: Optional[str] = None
+    fecha_programada: Optional[str] = None
     programado_para: Optional[str] = None
 
 
@@ -49,6 +50,7 @@ class GoalUpdate(BaseModel):
     objetivo_padre_id: Optional[int] = None
     fecha_inicio: Optional[str] = None
     fecha_fin: Optional[str] = None
+    fecha_programada: Optional[str] = None
     programado_para: Optional[str] = None
     completado: Optional[bool] = None
     fecha_completado: Optional[str] = None
@@ -249,6 +251,7 @@ class QuestionBase(BaseModel):
     categoria: Optional[str] = None
     is_required: Optional[bool] = False
     active: Optional[bool] = True
+    order: Optional[int] = 0
 
 
 class QuestionCreate(QuestionBase):
@@ -265,6 +268,7 @@ class QuestionUpdate(BaseModel):
     categoria: Optional[str] = None
     is_required: Optional[bool] = None
     active: Optional[bool] = None
+    order: Optional[int] = None
 
 
 class QuestionResponse(BaseModel):
@@ -280,6 +284,7 @@ class QuestionResponse(BaseModel):
     is_required: bool = False
     categoria: str
     frecuencia: Optional[str] = None
+    order: int = 0
     
     class Config:
         from_attributes = True
@@ -310,6 +315,21 @@ class QuestionFeedbackResponse(BaseModel):
     """Respuesta de feedback de pregunta."""
     id: int
     question_id: str
+    date: str
+    text: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class PhraseFeedbackCreate(BaseModel):
+    """Crear o actualizar feedback de una frase."""
+    text: str
+
+
+class PhraseFeedbackResponse(BaseModel):
+    """Respuesta de feedback de frase."""
+    id: str
+    phrase_id: str
     date: str
     text: str
     created_at: Optional[str] = None

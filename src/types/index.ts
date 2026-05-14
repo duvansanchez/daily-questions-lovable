@@ -81,6 +81,15 @@ export interface Phrase {
   createdAt: string;
 }
 
+export interface PhraseFeedback {
+  id: string;
+  phraseId: string;
+  date: string;
+  text: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Question types
 export type QuestionType = 'text' | 'select' | 'checkbox' | 'radio';
 export type QuestionCategory = 'personal' | 'work' | 'health' | 'habits' | 'goals' | 'general';

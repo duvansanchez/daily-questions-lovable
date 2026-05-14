@@ -64,6 +64,12 @@ const getEffectiveCompleted = (item: any): boolean => {
   return true;
 };
 
+const getTomorrowDateString = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
+};
+
 const isSubGoalVisibleOnDate = (subGoal: any, isoDate: string): boolean => {
   if (subGoal?.activa === false) return false;
   if (subGoal?.recurrente === true) return true;
@@ -152,7 +158,9 @@ const mapBackendGoal = (item: any, completedRecurringGoalIds?: Set<string>): Goa
   isParent: item.es_padre || false,
   subGoals: [] as SubGoal[],
   skipped: false,
-  scheduledFor: item.programado_para || undefined,
+  scheduledFor: item.fecha_programada
+    ? String(item.fecha_programada).slice(0, 10)
+    : (typeof item.programado_para === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.programado_para) ? item.programado_para : undefined),
 });
 
 const PARTES_DIA = [
@@ -662,7 +670,16 @@ export default function Goals() {
       if (data.parentGoalId) updatePayload.objetivo_padre_id = data.parentGoalId;
       if (data.startDate) updatePayload.fecha_inicio = data.startDate;
       if (data.endDate) updatePayload.fecha_fin = data.endDate;
-      if (data.scheduledType === 'specific' && data.scheduledDate) updatePayload.programado_para = data.scheduledDate;
+      if (data.scheduledType === 'tomorrow') {
+        updatePayload.programado_para = 'mañana';
+        updatePayload.fecha_programada = getTomorrowDateString();
+      } else if (data.scheduledType === 'specific' && data.scheduledDate) {
+        updatePayload.programado_para = 'fecha_especifica';
+        updatePayload.fecha_programada = data.scheduledDate;
+      } else {
+        updatePayload.programado_para = null;
+        updatePayload.fecha_programada = null;
+      }
       
       try {
         await goalsAPI.updateGoal(editingGoal.id, updatePayload);
@@ -768,7 +785,13 @@ export default function Goals() {
       if (data.parentGoalId) createPayload.objetivo_padre_id = data.parentGoalId;
       if (data.startDate) createPayload.fecha_inicio = data.startDate;
       if (data.endDate) createPayload.fecha_fin = data.endDate;
-      if (data.scheduledType === 'specific' && data.scheduledDate) createPayload.programado_para = data.scheduledDate;
+      if (data.scheduledType === 'tomorrow') {
+        createPayload.programado_para = 'mañana';
+        createPayload.fecha_programada = getTomorrowDateString();
+      } else if (data.scheduledType === 'specific' && data.scheduledDate) {
+        createPayload.programado_para = 'fecha_especifica';
+        createPayload.fecha_programada = data.scheduledDate;
+      }
       
       try {
         const createdGoal = await goalsAPI.createGoal(createPayload);

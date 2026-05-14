@@ -402,6 +402,42 @@ export const phrasesAPI = {
     return response.json() as Promise<PaginatedResponse<any>>;
   },
 
+  getPhraseFeedbacks: async (date: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/feedbacks?date=${date}`);
+    if (!response.ok) throw new Error('Error fetching phrase feedbacks');
+    return response.json() as Promise<Array<{ id: string; phrase_id: string; date: string; text: string; created_at?: string | null; updated_at?: string | null }>>;
+  },
+
+  getPhraseFeedbackHistory: async (phraseId: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/feedbacks/history/${phraseId}`);
+    if (!response.ok) throw new Error('Error fetching phrase feedback history');
+    return response.json() as Promise<Array<{ id: string; phrase_id: string; date: string; text: string; created_at?: string | null; updated_at?: string | null }>>;
+  },
+
+  savePhraseFeedback: async (date: string, phraseId: string, text: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/feedbacks/${phraseId}?date=${date}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Error saving phrase feedback');
+    }
+    return response.json() as Promise<{ id: string; phrase_id: string; date: string; text: string; created_at?: string | null; updated_at?: string | null }>;
+  },
+
+  deletePhraseFeedback: async (date: string, phraseId: string) => {
+    const response = await fetch(`${API_BASE_URL}/phrases/feedbacks/${phraseId}?date=${date}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Error deleting phrase feedback');
+    }
+    return response.json();
+  },
+
   getReport: async (mode: 'weekly' | 'monthly', referenceDate?: string) => {
     let url = `${API_BASE_URL}/phrases/report?mode=${mode}`;
     if (referenceDate) url += `&reference_date=${referenceDate}`;
